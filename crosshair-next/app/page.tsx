@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GlobePanel } from "@/components/three/GlobePanel";
 
 const STEPS = [
   ["Tell it what you sell", "Web design, SEO, app development, AI automation, or anything else"],
@@ -94,22 +95,7 @@ export default function Landing() {
               </div>
             </div>
 
-            <div className="grid gap-3">
-              {[
-                ["Not mobile-friendly · slow · no HTTPS", "WEB", "Pitch a redesign, with their load time as proof", "ch-pill-hot"],
-                ["No meta description · no sitemap", "SEO", "Pitch SEO, with the exact gaps listed", "ch-pill-warm"],
-                ["No online booking · no chat", "AI", "Pitch automation for their front desk", "ch-pill-hold"],
-                ["Just raised a Series A · new CMO", "NOW", "The trigger: budget and a new decision-maker", "ch-pill-sent"],
-              ].map(([rule, tier, note, pill]) => (
-                <div key={tier} className="ch-card flex items-center gap-4">
-                  <span className={`ch-pill ${pill}`}>{tier}</span>
-                  <div className="min-w-0">
-                    <b className="block text-sm">{rule}</b>
-                    <small style={{ color: "var(--color-muted)" }}>{note}</small>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <GlobePanel className="h-[380px] lg:h-[460px]" />
           </div>
         </div>
       </div>

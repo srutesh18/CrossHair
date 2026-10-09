@@ -54,7 +54,7 @@ export default async function TemplatesPage() {
 
   return (
     <>
-      <Topbar title="Templates" tag="your email sequence" />
+      <Topbar title="Templates" subtitle="The emails Crosshair writes for you" tag="your email sequence" />
       <div className="flex-1 space-y-4 overflow-y-auto p-5">
         {error ? (
           <ErrorState message={error} />

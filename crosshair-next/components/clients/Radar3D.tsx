@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Html } from "@react-three/drei";
 import * as THREE from "three";
 
 export interface Blip {
@@ -178,23 +177,24 @@ function Beacon({
         <circleGeometry args={[0.16, 24]} />
         <meshBasicMaterial ref={glow} color={color} transparent opacity={0.3} depthWrite={false} />
       </mesh>
-      {hovered ? (
-        <Html position={[0, height + 0.3, 0]} center distanceFactor={9} zIndexRange={[20, 0]}>
-          <div className="pointer-events-none rounded-md px-2 py-1 text-[11px] whitespace-nowrap text-white shadow-lg" style={{ background: "rgba(14,26,36,.92)", border: "1px solid #2f6f6a" }}>
-            <b>{blip.name}</b>
-            <span className="ml-1.5 opacity-70">{blip.score < 0 ? "auditing…" : `score ${blip.score}`}</span>
-            {blip.trigger ? <span className="ml-1.5" style={{ color: "#f2a07d" }}>· {blip.trigger}</span> : null}
-          </div>
-        </Html>
-      ) : null}
+
     </group>
   );
 }
 
-function Scene({ blips, scanning }: { blips: Blip[]; scanning: boolean }) {
+function Scene({
+  blips,
+  scanning,
+  hovered,
+  setHovered,
+}: {
+  blips: Blip[];
+  scanning: boolean;
+  hovered: string | null;
+  setHovered: (id: string | null) => void;
+}) {
   const sweep = useRef(0);
   const world = useRef<THREE.Group>(null);
-  const [hovered, setHovered] = useState<string | null>(null);
   const still = useMemo(prefersReducedMotion, []);
 
   useFrame((_, delta) => {
@@ -220,11 +220,23 @@ function Scene({ blips, scanning }: { blips: Blip[]; scanning: boolean }) {
 
 /** A tilted 3D radar: every company is a beacon, higher and nearer = better. */
 export default function Radar3D({ blips, scanning }: { blips: Blip[]; scanning: boolean }) {
+  const [hovered, setHovered] = useState<string | null>(null);
+  const blip = blips.find((b) => b.id === hovered);
   return (
-    <div className="relative h-full w-full" role="img" aria-label={`Radar showing ${blips.length} companies`}>
+    <div className="relative h-full w-full" role="img" aria-label={`Radar showing ${blips.length} companies`} style={{ cursor: hovered ? "pointer" : "default" }}>
       <Canvas camera={{ position: [0, 6.6, 7.6], fov: 40 }} onCreated={({ camera }) => camera.lookAt(0, -0.6, 0)} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
-        <Scene blips={blips} scanning={scanning} />
+        <Scene blips={blips} scanning={scanning} hovered={hovered} setHovered={setHovered} />
       </Canvas>
+      {blip ? (
+        <div className="pointer-events-none absolute top-4 right-4 rounded-[10px] px-3 py-2 text-[12px] text-white shadow-lg" style={{ background: "rgba(14,26,36,.9)", border: "1px solid #2f6f6a" }}>
+          <b className="block text-[13px]">{blip.name}</b>
+          <span className="opacity-70">{blip.domain}</span>
+          <span className="block">
+            {blip.score < 0 ? "auditing…" : `score ${blip.score}`}
+            {blip.trigger ? <span style={{ color: "#f2a07d" }}> · {blip.trigger}</span> : null}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { TriggerBadge } from "@/components/clients/Panels";
+
+const Funnel3D = dynamic(() => import("@/components/three/Funnel3D"), { ssr: false });
 
 export type Column = "to_contact" | "due" | "waiting" | "replied" | "closed";
 
@@ -80,7 +83,7 @@ function Card({ c, onOpen }: { c: PipelineCard; onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="ch-card block w-full text-left transition hover:-translate-y-0.5 hover:shadow-md"
+      className="ch-card ch-card-hover block w-full text-left"
       style={c.column === "due" ? { borderColor: "var(--color-brand)" } : undefined}
     >
       <div className="flex items-start gap-2">
@@ -107,7 +110,7 @@ function Card({ c, onOpen }: { c: PipelineCard; onOpen: () => void }) {
           />
         ))}
       </div>
-      <p className="mt-1.5 text-[12px]" style={{ color: c.column === "due" ? "var(--color-brand)" : "var(--color-muted)" }}>
+      <p className="mt-1.5 text-[12px]" style={{ color: c.column === "due" ? "var(--color-brand)" : "var(--color-muted)" }} suppressHydrationWarning>
         {nextLabel(c)}
       </p>
       <p className="mt-0.5 truncate text-[12px]">{c.company.emails[0] ?? (c.company.phone || "No email found")}</p>
@@ -376,20 +379,34 @@ export function PipelineBoard({ cards, smtp }: { cards: PipelineCard[]; smtp: bo
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {[
-          ["To contact", byColumn.get("to_contact")?.length ?? 0, "first email not sent"],
-          ["Follow-ups due", byColumn.get("due")?.length ?? 0, "ready to send now"],
-          ["Emails sent", sent, "across all companies"],
-          ["Replied", byColumn.get("replied")?.length ?? 0, "conversations started"],
-          ["Won", won, "new clients"],
-        ].map(([label, value, hint]) => (
-          <div key={label as string} className="ch-card py-3">
-            <b className="block text-[22px] leading-none font-semibold" style={{ fontFamily: "var(--font-mono)" }}>{value}</b>
-            <span className="mt-1 block text-[12px] font-semibold">{label}</span>
-            <span className="block text-[11px]" style={{ color: "var(--color-muted)" }}>{hint}</span>
-          </div>
-        ))}
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {[
+            ["To contact", byColumn.get("to_contact")?.length ?? 0, "first email not sent"],
+            ["Follow-ups due", byColumn.get("due")?.length ?? 0, "ready to send now"],
+            ["Emails sent", sent, "across all companies"],
+            ["Waiting", byColumn.get("waiting")?.length ?? 0, "next follow-up scheduled"],
+            ["Replied", byColumn.get("replied")?.length ?? 0, "conversations started"],
+            ["Won", won, "new clients"],
+          ].map(([label, value, hint]) => (
+            <div key={label as string} className="ch-card ch-card-hover py-3">
+              <b className="block text-[24px] leading-none font-semibold" style={{ fontFamily: "var(--font-mono)" }}>{value}</b>
+              <span className="mt-1 block text-[12px] font-semibold">{label}</span>
+              <span className="block text-[11px]" style={{ color: "var(--color-muted)" }}>{hint}</span>
+            </div>
+          ))}
+        </div>
+        <div className="relative h-[230px] overflow-hidden rounded-[16px]" style={{ background: "radial-gradient(120% 120% at 70% 20%, #1b3a48 0%, #121c28 55%, #0b111a 100%)" }}>
+          <p className="absolute top-3 left-4 z-10 text-[11px] tracking-[0.12em] text-white/60 uppercase" style={{ fontFamily: "var(--font-mono)" }}>Funnel</p>
+          <Funnel3D
+            stages={[
+              { label: "in pipeline", value: cards.length, color: "#5aa9ff" },
+              { label: "emailed", value: cards.filter((c) => c.emails.length > 0).length, color: "#f2a07d" },
+              { label: "replied", value: cards.filter((c) => c.stage === "replied" || c.stage === "won").length, color: "#f2b544" },
+              { label: "won", value: won, color: "#3ddc97" },
+            ]}
+          />
+        </div>
       </div>
 
       <div className="grid gap-3 overflow-x-auto md:grid-cols-5">

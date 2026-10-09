@@ -1,60 +1,53 @@
-import Link from "next/link";
-import { NavLink } from "@/components/ui/NavLink";
+import { Sidebar, type SidebarStats } from "@/components/ui/Sidebar";
+import { CommandPalette } from "@/components/ui/CommandPalette";
 import { createClient } from "@/lib/supabase/server";
 
-const NAV = [
-  { href: "/finder", label: "Radar" },
-  { href: "/pipeline", label: "Pipeline" },
-  { href: "/templates", label: "Templates" },
-];
+const WEEKLY_GOAL = 20;
 
-async function currentEmail(): Promise<string | null> {
+/** Live numbers for the sidebar. Every query runs as the user (RLS). */
+async function sidebarData(): Promise<{ email: string | null; stats: SidebarStats | null }> {
   try {
     const supabase = await createClient();
     const { data } = await supabase.auth.getUser();
-    return data.user?.email ?? null;
+    if (!data.user) return { email: null, stats: null };
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    weekStart.setHours(0, 0, 0, 0);
+
+    const [review, strong, due, pipeline, sent, run] = await Promise.all([
+      supabase.from("companies").select("id", { count: "exact", head: true }).eq("status", "audited"),
+      supabase.from("companies").select("id", { count: "exact", head: true }).eq("status", "audited").gte("score", 60),
+      supabase.from("outreach").select("id", { count: "exact", head: true }).eq("stage", "emailed").lte("next_step", 2).lte("next_action_at", now.toISOString()),
+      supabase.from("outreach").select("id", { count: "exact", head: true }).in("stage", ["to_contact", "emailed", "replied"]),
+      supabase.from("outreach_emails").select("id", { count: "exact", head: true }).gte("sent_at", weekStart.toISOString()),
+      supabase.from("crawl_runs").select("finished_at, started_at").eq("query", "auto-discovery").order("started_at", { ascending: false }).limit(1),
+    ]);
+    const last = (run.data ?? [])[0] as { finished_at: string | null; started_at: string } | undefined;
+    return {
+      email: data.user.email ?? null,
+      stats: {
+        toReview: review.count ?? 0,
+        strong: strong.count ?? 0,
+        due: due.count ?? 0,
+        inPipeline: pipeline.count ?? 0,
+        sentThisWeek: sent.count ?? 0,
+        weeklyGoal: WEEKLY_GOAL,
+        lastScan: last ? last.finished_at ?? last.started_at : null,
+      },
+    };
   } catch {
-    return null;
+    return { email: null, stats: null };
   }
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const email = await currentEmail();
+  const { email, stats } = await sidebarData();
   return (
-    <div className="grid min-h-screen md:grid-cols-[224px_minmax(0,1fr)]">
-      <aside
-        className="flex flex-row items-center gap-1 overflow-x-auto p-3 md:flex-col md:items-stretch md:p-4"
-        style={{ background: "var(--color-side)", color: "var(--color-side-fg)" }}
-      >
-        <Link
-          href="/"
-          className="hidden px-2 pb-4 text-2xl font-extrabold tracking-tight text-white md:block"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          Crosshair
-        </Link>
-        {NAV.map((item) => (
-          <NavLink key={item.href} href={item.href} label={item.label} />
-        ))}
-        <div className="hidden md:mt-auto md:block">
-          <div
-            className="border-t pt-3 text-xs"
-            style={{ borderColor: "rgba(255,255,255,.1)" }}
-          >
-            <b className="block text-[13px] text-white">Public data only</b>
-            Companies come from public posts and their own websites. Nothing is sent without you.
-          </div>
-          {email ? (
-            <form action="/auth/signout" method="post" className="mt-3 border-t pt-3 text-xs" style={{ borderColor: "rgba(255,255,255,.1)" }}>
-              <span className="block truncate" title={email}>{email}</span>
-              <button type="submit" className="mt-1 font-semibold text-white hover:underline">
-                Sign out
-              </button>
-            </form>
-          ) : null}
-        </div>
-      </aside>
-      <main className="flex min-h-0 min-w-0 flex-col">{children}</main>
+    <div className="grid min-h-screen md:grid-cols-[256px_minmax(0,1fr)]">
+      <Sidebar email={email} stats={stats} />
+      <main className="ch-rise flex min-h-0 min-w-0 flex-col">{children}</main>
+      <CommandPalette />
     </div>
   );
 }

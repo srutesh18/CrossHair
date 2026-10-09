@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
+import { GlobePanel } from "@/components/three/GlobePanel";
+import { CrosshairMark } from "@/components/ui/Icons";
 
 export function LoginForm() {
   const router = useRouter();
@@ -83,16 +85,20 @@ export function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-5">
-      <div className="ch-card w-full max-w-[400px] p-6">
-        <h1
-          className="text-2xl font-extrabold tracking-tight"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          Crosshair
+    <div className="grid min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      <div className="flex items-center justify-center px-5 py-10">
+      <div className="ch-rise w-full max-w-[400px]">
+        <div className="mb-8 flex items-center gap-2.5">
+          <span className="grid h-10 w-10 place-items-center rounded-[11px]" style={{ background: "#1f2433" }}>
+            <CrosshairMark className="h-7 w-7" />
+          </span>
+          <span className="text-2xl font-extrabold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Crosshair</span>
+        </div>
+        <h1 className="text-[28px] leading-tight font-bold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>
+          {mode === "signin" ? "Welcome back" : "Create your workspace"}
         </h1>
-        <p className="mt-1 mb-5 text-sm" style={{ color: "var(--color-muted)" }}>
-          {mode === "signin" ? "Sign in to your workspace." : "Create a workspace."}
+        <p className="mt-1 mb-6 text-sm" style={{ color: "var(--color-muted)" }}>
+          {mode === "signin" ? "Sign in to see who needs you today." : "Tell it what you sell; it finds who needs it."}
         </p>
 
         <form onSubmit={submit} className="space-y-3">
@@ -154,7 +160,7 @@ export function LoginForm() {
             </p>
           ) : null}
 
-          <button type="submit" className="ch-btn ch-btn-primary w-full justify-center" disabled={busy}>
+          <button type="submit" className="ch-btn ch-btn-primary w-full justify-center py-2.5" disabled={busy}>
             {busy ? "Working…" : mode === "signin" ? "Sign in" : "Create workspace"}
           </button>
         </form>
@@ -170,6 +176,17 @@ export function LoginForm() {
         >
           {mode === "signin" ? "Need a workspace? Create one" : "Already have one? Sign in"}
         </button>
+      </div>
+      </div>
+      <div className="hidden p-4 lg:block">
+        <div className="relative h-full min-h-[560px]">
+          <GlobePanel className="h-full" chips={false} />
+          <div className="pointer-events-none absolute right-0 bottom-14 left-0 px-10 text-white">
+            <p className="max-w-[30ch] text-[26px] leading-tight font-bold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>
+              Businesses share their websites every day. Crosshair finds the ones that need you.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

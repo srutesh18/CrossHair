@@ -49,7 +49,7 @@ export default async function PipelinePage() {
 
   return (
     <>
-      <Topbar title="Pipeline" tag={due ? `${due} follow-up${due === 1 ? "" : "s"} due` : `${cards.length} companies`}>
+      <Topbar title="Pipeline" subtitle="Write, send and follow up. Day 0, 3 and 7." tag={due ? `${due} follow-up${due === 1 ? "" : "s"} due` : `${cards.length} companies`}>
         <Link href="/finder" className="ch-btn text-[13px]">Add from Radar</Link>
       </Topbar>
       <div className="flex-1 overflow-y-auto p-5">

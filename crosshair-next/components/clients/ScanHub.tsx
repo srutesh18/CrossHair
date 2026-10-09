@@ -119,6 +119,12 @@ export function ScanHub({ blips, services, pending, lastScan, autoStart }: Props
   useEffect(() => {
     if (autoStart && !autoRan.current) {
       autoRan.current = true;
+      // Don't re-scan if the page is reloaded with ?scan=1 still in the URL.
+      if (window.location.search.includes("scan=1")) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("scan");
+        window.history.replaceState(null, "", url.pathname + (url.search || ""));
+      }
       void scan();
     } else if (pending > 0 && !discovering) {
       void runAudits();
@@ -138,7 +144,7 @@ export function ScanHub({ blips, services, pending, lastScan, autoStart }: Props
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <div className="flex flex-col gap-4 p-6">
           <div>
-            <p className="text-[11px] tracking-[0.16em] uppercase opacity-60" style={{ fontFamily: "var(--font-mono)" }}>
+            <p className="text-[11px] tracking-[0.16em] uppercase opacity-60" style={{ fontFamily: "var(--font-mono)" }} suppressHydrationWarning>
               {busy ? "Scanning" : lastScan ? `Last scan ${timeAgo(lastScan)}` : "Ready"}
             </p>
             <h2 className="mt-1 text-[26px] leading-tight font-bold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>

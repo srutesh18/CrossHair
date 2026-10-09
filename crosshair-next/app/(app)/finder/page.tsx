@@ -80,7 +80,10 @@ export default async function FindClientsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const filters = parseCompanyFilters(await searchParams);
+  const params = await searchParams;
+  const filters = parseCompanyFilters(params);
+  // "Scan now" from the sidebar or ⌘K arrives as ?scan=1.
+  const scanRequested = params.scan === "1";
 
   let services: string[] = [];
   let icp = "";
@@ -182,7 +185,7 @@ export default async function FindClientsPage({
 
   return (
     <>
-      <Topbar title="Radar" tag={onboarding ? "step 1 of 2" : `${stats.onRadar} companies`}>
+      <Topbar title="Radar" subtitle="Companies found, audited and ranked for what you sell" tag={onboarding ? "step 1 of 2" : `${stats.onRadar} companies`}>
         {!onboarding && !error ? (
           <a href={`/api/export/companies?${companyFiltersToQuery(filters)}`} className="ch-btn text-[13px]">
             Export all shown
@@ -204,7 +207,7 @@ export default async function FindClientsPage({
               services={services}
               pending={pending}
               lastScan={lastScan}
-              autoStart={!everScanned && blips.length === 0}
+              autoStart={scanRequested || (!everScanned && blips.length === 0)}
             />
             <details className="group">
               <summary className="cursor-pointer text-[13px] font-semibold" style={{ color: "var(--color-brand)" }}>
@@ -215,6 +218,7 @@ export default async function FindClientsPage({
               </div>
             </details>
 
+            <div className="ch-rise-2">
             <SourceTiles
               tiles={[
                 { label: "On radar", value: stats.onRadar, hint: `${stats.total} audited so far` },
@@ -223,8 +227,9 @@ export default async function FindClientsPage({
                 { label: "Reachable by email", value: stats.withEmail, hint: "public address on their site" },
               ]}
             />
+            </div>
 
-            <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="ch-rise-3 grid gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
               <TopOpportunities cards={cards} />
               <TriggerFeed items={triggerItems} />
             </div>
