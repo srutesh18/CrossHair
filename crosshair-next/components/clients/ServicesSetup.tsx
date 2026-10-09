@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 
 interface Props {
-  initial: { services: string[]; competitors: string[]; icp: string };
+  initial: { services: string[]; icp: string };
   /** First visit: a full onboarding card. Otherwise a one-line summary. */
   onboarding: boolean;
 }
@@ -91,13 +91,12 @@ export function ServicesSetup({ initial, onboarding }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(onboarding);
   const [services, setServices] = useState(initial.services);
-  const [competitors, setCompetitors] = useState(initial.competitors);
   const [icp, setIcp] = useState(initial.icp);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function save() {
-    if (services.length === 0 && competitors.length === 0) {
+    if (services.length === 0) {
       setError("Add at least one service you sell.");
       return;
     }
@@ -117,9 +116,11 @@ export function ServicesSetup({ initial, onboarding }: Props) {
       if (!member) throw new Error("No workspace found for this account.");
       const { error: err } = await supabase
         .from("orgs")
-        .update({ services, competitors, icp })
+        .update({ services, icp })
         .eq("id", member.org_id);
       if (err) throw err;
+      // Scores depend on which flaws your services fix.
+      await fetch("/api/companies/rescore", { method: "POST" }).catch(() => undefined);
       setOpen(false);
       router.refresh();
     } catch (err) {
@@ -144,16 +145,6 @@ export function ServicesSetup({ initial, onboarding }: Props) {
             nothing yet
           </span>
         )}
-        {competitors.length ? (
-          <>
-            <span className="ch-label ml-2">vs</span>
-            {competitors.map((c) => (
-              <span key={c} className="ch-tag">
-                {c}
-              </span>
-            ))}
-          </>
-        ) : null}
         <span className="flex-1" />
         <button type="button" className="text-[13px] font-semibold" style={{ color: "var(--color-brand)" }} onClick={() => setOpen(true)}>
           Edit
@@ -168,8 +159,9 @@ export function ServicesSetup({ initial, onboarding }: Props) {
         <div>
           <h2 className="text-lg font-semibold">What do you sell?</h2>
           <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-            List your services. Crosshair crawls public forums and communities for people asking for
-            them, and for people unhappy with your competitors, then lists them for you to contact.
+            List your services. Crosshair audits company websites for the problems those services
+            fix (slow, not mobile-friendly, poor SEO, no online booking…) and finds their public
+            contact details, so every email you send is about their real problem.
           </p>
         </div>
       ) : (
@@ -178,17 +170,10 @@ export function ServicesSetup({ initial, onboarding }: Props) {
 
       <ChipInput
         label="Services you offer"
-        hint="One per line or comma-separated, the way a buyer would say it."
-        placeholder="e.g. web design, SEO audit, bookkeeping"
+        hint="Comma-separated. Web design, SEO, app development and AI automation each map to specific website checks."
+        placeholder="e.g. web design, SEO, app development, AI automation"
         items={services}
         setItems={setServices}
-      />
-      <ChipInput
-        label="Competitors (optional)"
-        hint="Products or firms whose unhappy customers you can win."
-        placeholder="e.g. Wix, Squarespace"
-        items={competitors}
-        setItems={setCompetitors}
       />
       <div>
         <label htmlFor="icp" className="block text-[13px] font-semibold">
@@ -200,7 +185,7 @@ export function ServicesSetup({ initial, onboarding }: Props) {
           className="ch-input mt-1"
           value={icp}
           onChange={(e) => setIcp(e.target.value)}
-          placeholder="e.g. small businesses in the US with 5-50 staff"
+          placeholder="e.g. local clinics and restaurants with outdated websites"
         />
       </div>
 

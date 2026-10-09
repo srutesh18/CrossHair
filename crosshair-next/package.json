@@ -10,8 +10,7 @@
     "typecheck": "tsc --noEmit",
     "embed:docs": "tsx --conditions=react-server --env-file=.env.local scripts/embed-docs.ts",
     "db:migrate": "tsx --env-file=.env.local scripts/migrate.ts",
-    "db:status": "tsx --env-file=.env.local scripts/migrate.ts --status",
-    "crawl:preview": "tsx --conditions=react-server --env-file=.env.local scripts/crawl-preview.ts"
+    "db:status": "tsx --env-file=.env.local scripts/migrate.ts --status"
   },
   "dependencies": {
     "@crawlee/cheerio": "^3.18.2",

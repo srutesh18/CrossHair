@@ -3,7 +3,7 @@ import { NavLink } from "@/components/ui/NavLink";
 import { createClient } from "@/lib/supabase/server";
 
 const NAV = [
-  { href: "/finder", label: "Find leads" },
+  { href: "/finder", label: "Find clients" },
   { href: "/radar", label: "Radar" },
   { href: "/signals", label: "Signals" },
   { href: "/news", label: "News" },

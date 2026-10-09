@@ -71,6 +71,7 @@ also paste each file into the Supabase SQL editor, in order.
 | `…_lead_finder.sql` | `signals` + `crawl_runs` tables (RLS), forum and crawl URLs per workspace |
 | `…_services_first.sql` | `services` per workspace, `service` matched on each signal |
 | `…_neutral_defaults.sql` | neutral default product name |
+| `…_companies.sql` | `companies` table (RLS): website, contacts, flaws with evidence, score, status |
 
 All of them are applied to project `kvhqpgflvvdxxoebgjvv`. New migrations should use
 the same `YYYYMMDDHHMMSS_name.sql` naming.
@@ -133,61 +134,52 @@ If Typesafe is unreachable, Groq's ratings stand.
 There is deliberately **no sample-data fallback**: on failure the UI shows a real
 error rather than presenting invented leads as real.
 
-## Find leads (`/finder`, the home screen)
+## Find clients (`/finder`, the home screen)
 
-The user flow:
+Crosshair finds **companies whose websites have problems your services fix**,
+proves each problem with evidence, and collects the public contact details on
+their own site, so every message is about their real problem and goes to an
+address they published.
 
 1. **Say what you sell.** The first screen asks for your services (and,
-   optionally, competitors and who a good customer is). Nothing else is needed.
-2. **Find leads.** One click crawls the public sources below for people
-   *asking for* your services ("looking for a…", "can anyone recommend…") and
-   people *unhappy with* a competitor.
-3. **Review the table.** Every post gets a category and a 0-100 buying-intent
-   score. Filter by text, category, service, competitor, source, intent, date
-   and status; sort by intent or recency.
-4. **Pick who to contact.** Tick rows, then **Export selected** (CSV), or
-   **Score** a row to run the full Pain/Fit/Trigger pipeline and add it to your
-   pipeline (this step uses Groq).
-5. **Reach out.** Email automation, call automation (Sarvam AI) and LinkedIn
-   DM automation (n8n) are shown on the selection bar and are **work in
-   progress**: clicking them explains what they will do and sends nothing.
+   optionally, who a good customer is). Web design, SEO, app development and AI
+   automation each map to a set of website checks.
+2. **Add companies**, three ways:
+   - **Search Google**: "dentists" in "Austin, TX" (Places API, needs
+     `GOOGLE_API_KEY`). Businesses with no website are added too: that is the
+     biggest flaw of all.
+   - **Paste websites**: one per line, or "Name, website".
+   - **Upload CSV**: a `website` column, optionally `name`, `email`, `phone`.
+3. **Automatic audit.** New companies are audited in small batches with a
+   progress bar. Per site:
+   - homepage fetched over https (falls back to http, which is itself a flaw),
+     timed; robots.txt honoured (a site that disallows crawlers is skipped);
+   - **Crawlee** visits the contact / about pages for public emails (including
+     Cloudflare-protected ones and schema.org data), phone links, contact forms
+     and social profiles;
+   - up to 8 internal links are checked for 404s, plus `/sitemap.xml`;
+   - optional Google PageSpeed mobile score (same `GOOGLE_API_KEY`).
+4. **Review the table.** Score, company, flaws (click a row for every flaw and
+   its evidence), which of your services fix them, best contact. Filter by text,
+   service, flaw, contact (has email / phone / none), score and status; sort by
+   score or newest.
+5. **Act on a selection.** Export selected (CSV with emails, phones and the top
+   flaws as evidence), mark contacted, dismiss, delete. **Email**, **Call
+   (Sarvam AI)** and **LinkedIn DM (n8n)** are work in progress: they explain
+   what they will do and send nothing.
 
-Crawling and categorising need **no Groq key**.
+### What the audit checks (`lib/audit/checks.ts`)
 
-| Source | How | Default |
-|---|---|---|
-| Reddit | public search RSS, last year | on |
-| Hacker News | Algolia API, exact-phrase, last year | on |
-| Stack Exchange | public API: Stack Overflow, Software Recs, Web Apps, Super User | on |
-| GitHub Issues | public search API (set `GITHUB_TOKEN` for higher limits) | off (best for dev-tool competitors) |
-| Discourse forums | `/search.json` on each forum URL in Setup | when set |
-| Web crawl | **Crawlee** `CheerioCrawler` on the pages in Setup, same-site links 1 deep, honours robots.txt | when set |
+| Area (fixed by) | Flaws |
+|---|---|
+| Website (web design) | no website, site down, no HTTPS, not mobile-friendly, slow homepage, poor PageSpeed, © year 2+ years old, broken links, outdated WordPress/jQuery/Flash, hard to contact |
+| SEO | no or weak title, no meta description, no H1, noindex, no sitemap, images without alt text, no schema.org data, very little text, no analytics |
+| Automation (AI automation) | no online booking (only for appointment businesses: clinics, salons, restaurants…, judged from the site's title, description, headings and menu), no chat or WhatsApp |
+| App / portal (app development) | no customer login, online ordering or app (only for shops, restaurants, member businesses) |
 
-How a post is judged (`lib/crawl/classify.ts`):
-- **Kept** only if it is in English, names a competitor/keyword/search term,
-  and reads like a complaint. Searches pair each competitor with complaint
-  words ("alternative", "slow", "expensive"…).
-- **Category**: looking to hire / buy, switching, pricing, performance, reliability, support,
-  integrations, usability, missing feature. Keyword rules first; Typesafe AI
-  re-checks the strongest 30 and wins when ≥50% confident (it may upgrade a
-  post to *switching* but never downgrade an explicit "alternatives to …").
-- **Intent**: hire/buy or switching +40, other complaint +20, matches one of
-  your services +15, named competitor +15,
-  strong frustration +15, asking for recommendations +15, business context +10;
-  sellers advertising or launching ("[For Hire]", "Show HN", "I built") are
-  capped at 20 so they never outrank a real buyer.
-
-Filters: text, category, source, competitor, minimum intent, posted within,
-status (inbox / made into leads / dismissed), sort by intent or recency. The
-CSV export follows the same filters.
-
-```bash
-# Run the crawler from the terminal without the app (writes nothing):
-npm run crawl:preview -- --services "web design,seo audit"
-npm run crawl:preview -- --competitors "Tableau,Power BI,Looker" --keywords "slow dashboards"
-npm run crawl:preview -- --query "looker alternative" --sources hn,stackexchange,github
-npm run crawl:preview -- --competitors "Tableau" --crawl "https://example.com/forum" --sources web
-```
+**Score** (`lib/audit/score.ts`): high 25, medium 12, low 5 for each flaw in an
+area your services cover (capped at 90), +10 when an email or phone was found.
+Changing your services re-scores every company.
 
 ## Data sources
 

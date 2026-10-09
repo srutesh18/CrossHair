@@ -1,16 +1,17 @@
 # Crosshair
 
-**Find people who need what you sell, and know when *not* to send an email.**
+**Find companies whose websites have problems you fix, and reach them with proof.**
 
-Tell Crosshair the services you sell (and, optionally, your competitors). It
-crawls public communities for people asking for those services or unhappy with
-a competitor, sorts every post into a category with a buying-intent score, and
-lists them in a filterable table. Pick who to contact and export them; email,
-call (Sarvam) and LinkedIn (n8n) automation are on the way.
+Tell Crosshair the services you sell. Add companies (search Google for "dentists
+in Austin", paste websites, or upload a CSV). Crosshair audits each website for
+flaws your services fix (no HTTPS, not mobile-friendly, slow, poor SEO, no
+online booking…), collects the public contact details on the site, scores the
+opportunity, and lists everything in a filterable table. Pick who to contact and
+export them; email, call (Sarvam) and LinkedIn (n8n) automation are on the way.
 
 The app lives in [`crosshair-next/`](crosshair-next/): Next.js 15, Supabase
-(Postgres, Auth, RLS, pgvector), Groq for AI writing, Typesafe AI for
-classification, and Crawlee for open-source web crawling.
+(Postgres, Auth, RLS, pgvector), Crawlee for open-source crawling, Google
+Places / PageSpeed (optional), Groq and Typesafe AI for scoring and drafting.
 
 See [`crosshair-next/README.md`](crosshair-next/README.md) for setup.
 

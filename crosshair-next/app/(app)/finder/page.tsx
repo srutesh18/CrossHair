@@ -1,86 +1,108 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { Topbar } from "@/components/ui/Topbar";
 import { EmptyState, ErrorState } from "@/components/ui/States";
-import { ServicesSetup } from "@/components/finder/ServicesSetup";
-import { CrawlPanel } from "@/components/finder/CrawlPanel";
-import { FilterBar } from "@/components/finder/FilterBar";
-import { LeadTable, type LeadRow } from "@/components/finder/LeadTable";
+import { ServicesSetup } from "@/components/clients/ServicesSetup";
+import { AddCompanies } from "@/components/clients/AddCompanies";
+import { AuditRunner } from "@/components/clients/AuditRunner";
+import { CompanyFilters } from "@/components/clients/CompanyFilters";
+import { CompanyTable, type CompanyRow } from "@/components/clients/CompanyTable";
 import { requireSession } from "@/lib/supabase/server";
-import { CATEGORIES, CATEGORY_KEYS } from "@/lib/crawl/classify";
-import { SOURCE_KEYS, SOURCE_LABEL } from "@/lib/crawl/run";
-import { buyerForumsFor } from "@/lib/crawl/services";
-import { filtersToQuery, getSignals, parseSignalFilters, type Signal } from "@/lib/crawl/signals";
+import { companyFiltersToQuery, getCompanies, parseCompanyFilters, type Company } from "@/lib/companies";
+import { AREA_LABEL, type Area } from "@/lib/audit/checks";
+import { placesEnabled } from "@/lib/sources/places";
 
 export const dynamic = "force-dynamic";
 
-interface OrgRow {
-  services: string[] | null;
-  competitors: string[] | null;
-  icp: string | null;
-  forum_urls: string[] | null;
-  crawl_urls: string[] | null;
-}
+const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 } as const;
 
-function toRow(s: Signal): LeadRow {
+/** Flaw filter options: the checks the auditor can report. */
+const FLAW_OPTIONS = [
+  ["no_website", "No website"],
+  ["site_down", "Website down"],
+  ["no_https", "No HTTPS"],
+  ["not_mobile", "Not mobile-friendly"],
+  ["slow", "Slow homepage"],
+  ["pagespeed", "Poor mobile performance"],
+  ["stale", "Looks unmaintained"],
+  ["broken_links", "Broken links"],
+  ["outdated_tech", "Outdated build"],
+  ["no_contact", "Hard to contact"],
+  ["no_title", "No page title"],
+  ["no_meta_description", "No meta description"],
+  ["no_h1", "No main heading"],
+  ["noindex", "Hidden from Google"],
+  ["no_booking", "No online booking"],
+  ["no_chat", "No chat"],
+  ["no_portal", "No customer portal"],
+].map(([value, label]) => ({ value: value as string, label: label as string }));
+
+function toRow(c: Company): CompanyRow {
+  const flaws = [...(c.flaws ?? [])].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
   return {
-    id: s.id,
-    intent: s.intent,
-    categoryLabel: CATEGORIES[s.category]?.label ?? s.category,
-    title: s.title,
-    body: s.body,
-    author: s.author,
-    sourceLabel: SOURCE_LABEL[s.source] ?? s.source,
-    sourceName: s.source_name,
-    url: s.source_url,
-    service: s.service ?? "",
-    competitor: s.competitor,
-    postedAt: s.posted_at,
-    status: s.status,
-    leadId: s.lead_id,
+    id: c.id,
+    name: c.name,
+    website: c.website,
+    domain: c.domain,
+    category: c.category,
+    address: c.address,
+    rating: c.rating,
+    ratingCount: c.rating_count,
+    score: c.score,
+    flaws: flaws.map((f) => ({ ...f, areaLabel: AREA_LABEL[f.area as Area] ?? f.area })),
+    services: c.services_matched ?? [],
+    emails: c.emails ?? [],
+    phone: c.phone,
+    contactPage: c.contact_page,
+    socials: c.socials ?? {},
+    status: c.status,
+    auditError: c.audit_error,
   };
 }
 
-export default async function FinderPage({
+export default async function FindClientsPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const filters = parseSignalFilters(await searchParams);
+  const filters = parseCompanyFilters(await searchParams);
 
-  let org: OrgRow | null = null;
-  let signals: Signal[] = [];
-  let counts: Record<string, number> = {};
-  let total = 0;
+  let services: string[] = [];
+  let icp = "";
+  let companies: Company[] = [];
+  let pending = 0;
+  let stats = { total: 0, withEmail: 0, strong: 0 };
   let error: string | null = null;
   try {
     const { supabase, orgId } = await requireSession();
-    const [orgRes, sig, countRes] = await Promise.all([
-      supabase.from("orgs").select("services, competitors, icp, forum_urls, crawl_urls").eq("id", orgId).maybeSingle(),
-      getSignals(supabase, filters),
-      supabase.from("signals").select("category").eq("status", "new").limit(5000),
+    const [orgRes, list, pendingRes, statsRes] = await Promise.all([
+      supabase.from("orgs").select("services, icp").eq("id", orgId).maybeSingle(),
+      getCompanies(supabase, filters),
+      supabase.from("companies").select("id", { count: "exact", head: true }).eq("status", "new"),
+      supabase.from("companies").select("score, emails").in("status", ["audited"]).limit(5000),
     ]);
     if (orgRes.error) throw new Error(orgRes.error.message);
-    org = orgRes.data as OrgRow | null;
-    signals = sig;
-    for (const r of (countRes.data ?? []) as Array<{ category: string }>) {
-      counts[r.category] = (counts[r.category] ?? 0) + 1;
-      total += 1;
-    }
+    services = (orgRes.data?.services as string[] | undefined) ?? [];
+    icp = (orgRes.data?.icp as string | undefined) ?? "";
+    companies = list;
+    pending = pendingRes.count ?? 0;
+    const rows = (statsRes.data ?? []) as Array<{ score: number; emails: string[] }>;
+    stats = {
+      total: rows.length,
+      withEmail: rows.filter((r) => r.emails?.length).length,
+      strong: rows.filter((r) => r.score >= 60).length,
+    };
   } catch (err) {
-    error = err instanceof Error ? err.message : "Could not load leads";
+    error = err instanceof Error ? err.message : "Could not load companies";
   }
 
-  const services = org?.services ?? [];
-  const competitors = org?.competitors ?? [];
-  const onboarding = !error && services.length === 0 && competitors.length === 0;
-  const filtered = filtersToQuery({ ...filters, sort: "intent" }) !== "";
+  const onboarding = !error && services.length === 0;
+  const filtered = companyFiltersToQuery({ ...filters, sort: "score" }) !== "";
 
   return (
     <>
-      <Topbar title="Find leads" tag={onboarding ? "step 1 of 2" : `${total} to review`}>
+      <Topbar title="Find clients" tag={onboarding ? "step 1 of 2" : `${stats.total} audited`}>
         {!onboarding && !error ? (
-          <a href={`/api/export/signals?${filtersToQuery(filters)}`} className="ch-btn text-[13px]">
+          <a href={`/api/export/companies?${companyFiltersToQuery(filters)}`} className="ch-btn text-[13px]">
             Export all shown
           </a>
         ) : null}
@@ -91,69 +113,50 @@ export default async function FinderPage({
           <ErrorState message={error} />
         ) : onboarding ? (
           <div className="mx-auto max-w-[640px]">
-            <ServicesSetup onboarding initial={{ services, competitors, icp: org?.icp ?? "" }} />
+            <ServicesSetup onboarding initial={{ services, icp }} />
           </div>
         ) : (
           <div className="space-y-3">
-            <ServicesSetup onboarding={false} initial={{ services, competitors, icp: org?.icp ?? "" }} />
-            <CrawlPanel
-              forumCount={org?.forum_urls?.length ?? 0}
-              crawlCount={org?.crawl_urls?.length ?? 0}
-              hasBuyerForums={buyerForumsFor(services).length > 0}
-            />
+            <ServicesSetup onboarding={false} initial={{ services, icp }} />
+            <AddCompanies googleEnabled={placesEnabled()} />
+            <AuditRunner pending={pending} />
 
-            {total > 0 ? (
-              <div className="flex flex-wrap gap-1.5 text-[12px]">
-                <Link
-                  href={`/finder?${filtersToQuery({ ...filters, category: "all" })}`}
-                  className="rounded-full border px-2.5 py-0.5"
-                  style={
-                    filters.category === "all"
-                      ? { background: "var(--color-fg)", color: "var(--color-bg)", borderColor: "var(--color-fg)" }
-                      : { borderColor: "var(--color-line)" }
-                  }
-                >
-                  All <span style={{ fontFamily: "var(--font-mono)" }}>{total}</span>
-                </Link>
-                {CATEGORY_KEYS.filter((k) => counts[k]).map((k) => (
-                  <Link
-                    key={k}
-                    href={`/finder?${filtersToQuery({ ...filters, category: k })}`}
-                    className="rounded-full border px-2.5 py-0.5"
-                    style={
-                      filters.category === k
-                        ? { background: "var(--color-fg)", color: "var(--color-bg)", borderColor: "var(--color-fg)" }
-                        : { borderColor: "var(--color-line)" }
-                    }
-                  >
-                    {CATEGORIES[k].label} <span style={{ fontFamily: "var(--font-mono)" }}>{counts[k]}</span>
-                  </Link>
+            {stats.total > 0 ? (
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  ["Audited", stats.total],
+                  ["With an email", stats.withEmail],
+                  ["Score 60+", stats.strong],
+                ].map(([label, value]) => (
+                  <div key={label as string} className="ch-card py-3">
+                    <b className="block text-xl leading-none font-semibold">{value}</b>
+                    <span className="text-[12px]" style={{ color: "var(--color-muted)" }}>{label}</span>
+                  </div>
                 ))}
               </div>
             ) : null}
 
             <Suspense>
-              <FilterBar
-                categories={CATEGORY_KEYS.map((k) => ({ value: k, label: CATEGORIES[k].label }))}
-                sources={SOURCE_KEYS.map((k) => ({ value: k, label: SOURCE_LABEL[k] }))}
-                services={services}
-                competitors={competitors}
-              />
+              <CompanyFilters services={services} flaws={FLAW_OPTIONS} />
             </Suspense>
 
-            {signals.length === 0 ? (
+            {companies.length === 0 ? (
               <EmptyState
-                title={filtered ? "No leads match these filters" : "No leads yet"}
-                hint={filtered ? "Clear a filter or lower the minimum intent." : "Click Find leads to search public communities for people who need what you sell."}
+                title={filtered ? "No companies match these filters" : "No companies yet"}
+                hint={
+                  filtered
+                    ? "Clear a filter or lower the minimum score."
+                    : "Search Google for a type of business in a city, or paste a list of websites. Each one is audited for flaws your services fix."
+                }
               />
             ) : (
               <Suspense>
-                <LeadTable rows={signals.map(toRow)} />
+                <CompanyTable rows={companies.map(toRow)} />
               </Suspense>
             )}
             <p className="text-[12px]" style={{ color: "var(--color-muted)" }}>
-              Public posts only. Intent is highest for people asking to hire or buy, or to switch away
-              from a competitor. Tick leads to export them or (soon) reach out by email, call or LinkedIn.
+              Public websites only; sites that ask crawlers to stay away (robots.txt) are skipped. Score = how much
+              of what&apos;s wrong your services fix, +10 when there&apos;s a public way to reach them. Click a row for every flaw and its evidence.
             </p>
           </div>
         )}
