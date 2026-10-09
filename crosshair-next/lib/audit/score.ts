@@ -17,13 +17,25 @@ export function areasFor(services: string[]): Map<string, Area[]> {
 const WEIGHT: Record<Severity, number> = { high: 25, medium: 12, low: 5 };
 
 /**
- * Opportunity score: how much of what's wrong your services fix, plus a bonus
- * when there is a public way to reach them. 0-100.
+ * Trigger bonus: funding (budget) or a new executive (a new decision-maker)
+ * makes now the moment to reach out; fresher news counts more.
+ */
+function triggerBonus(trigger: { kind: string; at: string | null } | null): number {
+  if (!trigger?.kind) return 0;
+  const days = trigger.at ? (Date.now() - new Date(trigger.at).getTime()) / 86_400_000 : 30;
+  const base = trigger.kind === "Funding" || trigger.kind === "New executive" ? 15 : 10;
+  return days <= 30 ? base : days <= 90 ? Math.round(base / 2) : 0;
+}
+
+/**
+ * Opportunity score: how much of what's wrong your services fix (pain), plus
+ * a bonus for recent news (trigger) and for a public way to reach them. 0-100.
  */
 export function scoreCompany(
   flaws: Flaw[],
   services: string[],
   contactable: boolean,
+  trigger: { kind: string; at: string | null } | null = null,
 ): { score: number; servicesMatched: string[] } {
   const byService = areasFor(services);
   const covered = new Set([...byService.values()].flat());
@@ -31,6 +43,6 @@ export function scoreCompany(
   const counts = (f: Flaw) => covered.size === 0 || covered.has(f.area);
   const raw = flaws.filter(counts).reduce((sum, f) => sum + WEIGHT[f.severity], 0);
   const servicesMatched = services.filter((s) => (byService.get(s) ?? []).some((a) => flaws.some((f) => f.area === a)));
-  const score = Math.min(90, raw) + (contactable ? 10 : 0);
+  const score = Math.min(75, raw) + triggerBonus(trigger) + (contactable ? 10 : 0);
   return { score: Math.max(0, Math.min(100, score)), servicesMatched };
 }

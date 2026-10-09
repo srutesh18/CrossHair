@@ -8,7 +8,7 @@ import { nameFromDomain, normaliseWebsite } from "./audit/url";
 
 export type CompanyStatus = "new" | "audited" | "failed" | "contacted" | "dismissed";
 
-export type CompanySource = "manual" | "csv" | "google_places" | "reddit" | "hn" | "forum";
+export type CompanySource = "manual" | "csv" | "google_places" | "reddit" | "hn" | "forum" | "news";
 
 export interface Company {
   id: string;
@@ -20,6 +20,10 @@ export interface Company {
   found_title: string;
   found_author: string;
   found_at: string | null;
+  trigger_kind: string;
+  trigger_headline: string;
+  trigger_url: string;
+  trigger_at: string | null;
   search_query: string;
   address: string;
   category: string;
@@ -54,6 +58,10 @@ export interface NewCompany {
   found_title?: string;
   found_author?: string;
   found_at?: string | null;
+  trigger_kind?: string;
+  trigger_headline?: string;
+  trigger_url?: string;
+  trigger_at?: string | null;
 }
 
 /**
@@ -137,6 +145,10 @@ export async function addCompanies(supabase: SupabaseClient, orgId: string, rows
   return added;
 }
 
+function triggerOf(c: { trigger_kind?: string; trigger_at?: string | null }): { kind: string; at: string | null } | null {
+  return c.trigger_kind ? { kind: c.trigger_kind, at: c.trigger_at ?? null } : null;
+}
+
 async function orgServices(supabase: SupabaseClient, orgId: string): Promise<string[]> {
   const { data } = await supabase.from("orgs").select("services").eq("id", orgId).maybeSingle();
   return (data?.services as string[] | undefined) ?? [];
@@ -147,7 +159,7 @@ async function auditOne(supabase: SupabaseClient, company: Company, services: st
   const now = new Date().toISOString();
   if (!company.website) {
     const flaws = [noWebsiteFlaw()];
-    const { score, servicesMatched } = scoreCompany(flaws, services, Boolean(company.phone || company.emails.length));
+    const { score, servicesMatched } = scoreCompany(flaws, services, Boolean(company.phone || company.emails.length), triggerOf(company));
     await supabase
       .from("companies")
       .update({ flaws, score, services_matched: servicesMatched, status: "audited", audit_error: "", audited_at: now })
@@ -176,7 +188,7 @@ async function auditOne(supabase: SupabaseClient, company: Company, services: st
     const name =
       company.name === nameFromDomain(company.domain) && brand.length >= 2 && brand.length <= 40 ? brand : company.name;
     const phone = company.phone || result.contacts.phones[0] || "";
-    const { score, servicesMatched } = scoreCompany(result.flaws, services, emails.length > 0 || Boolean(phone));
+    const { score, servicesMatched } = scoreCompany(result.flaws, services, emails.length > 0 || Boolean(phone), triggerOf(company));
     const { error } = await supabase
       .from("companies")
       .update({
@@ -238,7 +250,7 @@ export async function auditPending(
 /** Re-score every audited company after the user changes their services. */
 export async function rescoreAll(supabase: SupabaseClient, orgId: string): Promise<number> {
   const services = await orgServices(supabase, orgId);
-  const { data, error } = await supabase.from("companies").select("id, flaws, emails, phone").eq("status", "audited");
+  const { data, error } = await supabase.from("companies").select("id, flaws, emails, phone, trigger_kind, trigger_at").eq("status", "audited");
   if (error) throw new Error(error.message);
   let n = 0;
   for (const c of data ?? []) {
@@ -246,6 +258,7 @@ export async function rescoreAll(supabase: SupabaseClient, orgId: string): Promi
       (c.flaws as Flaw[]) ?? [],
       services,
       ((c.emails as string[]) ?? []).length > 0 || Boolean(c.phone),
+      triggerOf(c as { trigger_kind?: string; trigger_at?: string | null }),
     );
     await supabase.from("companies").update({ score, services_matched: servicesMatched }).eq("id", c.id);
     n += 1;
@@ -256,6 +269,7 @@ export async function rescoreAll(supabase: SupabaseClient, orgId: string): Promi
 // ---------------------------------------------------------------- listing
 
 export interface CompanyFilters {
+  trigger: "" | "any" | "Funding" | "New executive" | "Hiring" | "Expansion";
   q: string;
   service: string;
   flaw: string;
@@ -272,7 +286,11 @@ export function parseCompanyFilters(p: Params): CompanyFilters {
   const contact = get(p, "contact");
   const status = get(p, "status");
   const minScore = Number(get(p, "minScore"));
+  const trigger = get(p, "trigger");
   return {
+    trigger: (["any", "Funding", "New executive", "Hiring", "Expansion"] as const).includes(trigger as never)
+      ? (trigger as CompanyFilters["trigger"])
+      : "",
     q: get(p, "q").slice(0, 100),
     service: get(p, "service").slice(0, 100),
     flaw: get(p, "flaw").slice(0, 40),
@@ -288,6 +306,7 @@ export function parseCompanyFilters(p: Params): CompanyFilters {
 export function companyFiltersToQuery(f: CompanyFilters): string {
   const p = new URLSearchParams();
   if (f.q) p.set("q", f.q);
+  if (f.trigger) p.set("trigger", f.trigger);
   if (f.service) p.set("service", f.service);
   if (f.flaw) p.set("flaw", f.flaw);
   if (f.contact !== "any") p.set("contact", f.contact);
@@ -304,6 +323,8 @@ export async function getCompanies(supabase: SupabaseClient, f: CompanyFilters, 
   if (f.status === "ready") query = query.in("status", ["new", "audited", "failed"]);
   else if (f.status !== "all") query = query.eq("status", f.status);
   if (f.service) query = query.contains("services_matched", [f.service]);
+  if (f.trigger === "any") query = query.neq("trigger_kind", "");
+  else if (f.trigger) query = query.eq("trigger_kind", f.trigger);
   if (f.flaw) query = query.contains("flaws", [{ key: f.flaw }]);
   if (f.contact === "email") query = query.neq("emails", "{}");
   if (f.contact === "phone") query = query.neq("phone", "");

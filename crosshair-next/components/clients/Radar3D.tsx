@@ -11,6 +11,8 @@ export interface Blip {
   domain: string;
   /** 0-100 opportunity score; -1 while the site is still being audited. */
   score: number;
+  /** In the news (funding, new leader…): drawn with a pulsing ring. */
+  trigger?: string;
 }
 
 const RADIUS = 4;
@@ -130,6 +132,8 @@ function Beacon({
   const color = colorFor(blip.score);
   const head = useRef<THREE.Mesh>(null);
   const glow = useRef<THREE.MeshBasicMaterial>(null);
+  const ring = useRef<THREE.Mesh>(null);
+  const ringMat = useRef<THREE.MeshBasicMaterial>(null);
 
   useFrame(() => {
     // Flash when the beam passes over this blip, then fade.
@@ -138,6 +142,12 @@ function Beacon({
     const flash = Math.max(0, 1 - behind / 1.4);
     if (head.current) head.current.scale.setScalar(1 + flash * 0.9 + (hovered ? 0.6 : 0));
     if (glow.current) glow.current.opacity = 0.25 + flash * 0.6;
+    if (ring.current && ringMat.current) {
+      // Expanding ripple, once a second and a half.
+      const t = (performance.now() / 1500 + theta) % 1;
+      ring.current.scale.setScalar(1 + t * 2.2);
+      ringMat.current.opacity = 0.8 * (1 - t);
+    }
   });
 
   return (
@@ -158,6 +168,12 @@ function Beacon({
         <sphereGeometry args={[0.07, 16, 16]} />
         <meshBasicMaterial color={color} />
       </mesh>
+      {blip.trigger ? (
+        <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+          <ringGeometry args={[0.16, 0.2, 32]} />
+          <meshBasicMaterial ref={ringMat} color={BEAM} transparent depthWrite={false} />
+        </mesh>
+      ) : null}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.008, 0]}>
         <circleGeometry args={[0.16, 24]} />
         <meshBasicMaterial ref={glow} color={color} transparent opacity={0.3} depthWrite={false} />
@@ -167,6 +183,7 @@ function Beacon({
           <div className="pointer-events-none rounded-md px-2 py-1 text-[11px] whitespace-nowrap text-white shadow-lg" style={{ background: "rgba(14,26,36,.92)", border: "1px solid #2f6f6a" }}>
             <b>{blip.name}</b>
             <span className="ml-1.5 opacity-70">{blip.score < 0 ? "auditing…" : `score ${blip.score}`}</span>
+            {blip.trigger ? <span className="ml-1.5" style={{ color: "#f2a07d" }}>· {blip.trigger}</span> : null}
           </div>
         </Html>
       ) : null}

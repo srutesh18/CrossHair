@@ -11,11 +11,12 @@ const Radar3D = dynamic(() => import("./Radar3D"), {
   loading: () => <div className="grid h-full place-items-center text-[13px] text-white/50">Loading radar…</div>,
 });
 
-type Source = "reddit" | "hn" | "forums";
+type Source = "reddit" | "hn" | "forums" | "news";
 const SOURCES: Array<{ key: Source; label: string; detail: string }> = [
   { key: "reddit", label: "Reddit", detail: "owners sharing their site in business communities" },
   { key: "hn", label: "Hacker News", detail: "new launches with a website" },
   { key: "forums", label: "Communities", detail: "Bubble, n8n and Make members' sites" },
+  { key: "news", label: "Company news", detail: "who just raised money or hired a new leader" },
 ];
 
 type SourceState =
@@ -47,6 +48,7 @@ export function ScanHub({ blips, services, pending, lastScan, autoStart }: Props
     reddit: { state: "idle" },
     hn: { state: "idle" },
     forums: { state: "idle" },
+    news: { state: "idle" },
   });
   const [discovering, setDiscovering] = useState(false);
   const [auditing, setAuditing] = useState(false);
@@ -82,7 +84,7 @@ export function ScanHub({ blips, services, pending, lastScan, autoStart }: Props
   const scan = useCallback(async () => {
     setDiscovering(true);
     setError(null);
-    setStatus({ reddit: { state: "running" }, hn: { state: "running" }, forums: { state: "running" } });
+    setStatus({ reddit: { state: "running" }, hn: { state: "running" }, forums: { state: "running" }, news: { state: "running" } });
     // One request per source so each one's progress shows as it lands.
     await Promise.all(
       SOURCES.map(async ({ key }) => {
@@ -189,7 +191,9 @@ export function ScanHub({ blips, services, pending, lastScan, autoStart }: Props
                       {st.state === "running"
                         ? "searching…"
                         : st.state === "done"
-                          ? `${st.sites} sites found, ${st.added} new`
+                          ? key === "news"
+                            ? `${st.sites} companies with fresh news, ${st.added} new`
+                            : `${st.sites} sites found, ${st.added} new`
                           : st.state === "error"
                             ? st.error
                             : detail}
@@ -220,6 +224,7 @@ export function ScanHub({ blips, services, pending, lastScan, autoStart }: Props
             <span><i className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: "#f2b544" }} />some gaps</span>
             <span><i className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: "#7c8597" }} />few gaps</span>
             <span><i className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: "#5aa9ff" }} />auditing</span>
+            <span><i className="mr-1 inline-block h-2 w-2 rounded-full border-2" style={{ borderColor: "#f2a07d" }} />in the news</span>
             <span>Closer to the centre and taller = better opportunity</span>
           </div>
         </div>

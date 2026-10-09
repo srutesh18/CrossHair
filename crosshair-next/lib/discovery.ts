@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { searchReddit } from "./sources/reddit";
 import { recentLaunches, searchHackerNews } from "./sources/hackernews";
+import { newsCompanies } from "./sources/companyNews";
 import type { PublicPost } from "./sources/types";
 import { addCompanies, type NewCompany } from "./companies";
 import { nameFromDomain, normaliseWebsite } from "./audit/url";
@@ -13,13 +14,14 @@ import { nameFromDomain, normaliseWebsite } from "./audit/url";
  * owner who asked for opinions. No manual lists, no logins, public data only.
  */
 
-export const DISCOVERY_SOURCES = ["reddit", "hn", "forums"] as const;
+export const DISCOVERY_SOURCES = ["reddit", "hn", "forums", "news"] as const;
 export type DiscoverySource = (typeof DISCOVERY_SOURCES)[number];
 
 export const DISCOVERY_LABEL: Record<DiscoverySource, string> = {
   reddit: "Reddit",
   hn: "Hacker News",
   forums: "Communities",
+  news: "Company news",
 };
 
 const BUSINESS_SUBS = [
@@ -97,6 +99,8 @@ const HOBBY = /\b(game|games|open[- ]source|library|chrome extension|browser ext
 
 function businessScore(c: NewCompany): number {
   const text = c.found_title ?? "";
+  // Companies in the news with a trigger are the best prospects of all.
+  if (c.trigger_kind) return 5;
   return (BUSINESS.test(text) ? 2 : 0) - (HOBBY.test(text) ? 2 : 0) + (c.source === "forum" ? 1 : 0);
 }
 
@@ -133,10 +137,40 @@ export async function discoverCompanies(
   }
   if (sources.includes("forums")) jobs.push(["forums", forumPosts]);
 
-  const settled = await Promise.allSettled(jobs.map(([, job]) => job()));
   const stats: Partial<Record<DiscoverySource, SourceStat>> = {};
   const companies: NewCompany[] = [];
   const seen = new Set<string>();
+
+  // News is different: the headline is the trigger, the website is resolved.
+  const newsJob = sources.includes("news")
+    ? newsCompanies(30)
+        .then((r) => {
+          for (const t of r.companies) {
+            if (seen.has(t.domain)) continue;
+            seen.add(t.domain);
+            companies.push({
+              name: t.company,
+              website: t.website,
+              domain: t.domain,
+              source: "news",
+              found_url: t.url,
+              found_title: `${t.headline} (${t.source})`,
+              found_author: t.source,
+              found_at: t.publishedAt,
+              trigger_kind: t.kind,
+              trigger_headline: t.headline,
+              trigger_url: t.url,
+              trigger_at: t.publishedAt,
+            });
+          }
+          stats.news = { ok: true, posts: r.triggers, sites: r.companies.length };
+        })
+        .catch((err: unknown) => {
+          stats.news = { ok: false, posts: 0, sites: 0, error: err instanceof Error ? err.message : String(err) };
+        })
+    : Promise.resolve();
+
+  const [settled] = await Promise.all([Promise.allSettled(jobs.map(([, job]) => job())), newsJob]);
 
   settled.forEach((r, i) => {
     const key = jobs[i]?.[0];
@@ -169,7 +203,7 @@ export async function discoverCompanies(
   companies.sort(
     (a, b) => businessScore(b) - businessScore(a) || (b.found_at ?? "").localeCompare(a.found_at ?? ""),
   );
-  return { companies: companies.slice(0, maxCompanies), sources: stats };
+  return { companies: companies.slice(0, maxCompanies + (stats.news?.sites ?? 0)), sources: stats };
 }
 
 /** Run a discovery scan for the workspace and record it. */

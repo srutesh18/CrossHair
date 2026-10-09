@@ -56,6 +56,14 @@ export function CompanyFilters({ services, flaws }: { services: string[]; flaws:
         ? select("service", "", "Fixable with", [{ value: "", label: "Any service" }, ...services.map((s) => ({ value: s, label: `Needs ${s}` }))])
         : null}
       {select("flaw", "", "Flaw", [{ value: "", label: "Any flaw" }, ...flaws])}
+      {select("trigger", "", "Trigger", [
+        { value: "", label: "Any news" },
+        { value: "any", label: "Has a trigger" },
+        { value: "Funding", label: "Just raised money" },
+        { value: "New executive", label: "New leader" },
+        { value: "Hiring", label: "Hiring" },
+        { value: "Expansion", label: "Expanding" },
+      ])}
       {select("contact", "any", "Contact", [
         { value: "any", label: "Any contact" },
         { value: "email", label: "Has email" },

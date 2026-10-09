@@ -73,6 +73,7 @@ also paste each file into the Supabase SQL editor, in order.
 | `…_neutral_defaults.sql` | neutral default product name |
 | `…_companies.sql` | `companies` table (RLS): website, contacts, flaws with evidence, score, status |
 | `…_company_discovery.sql` | discovery sources (reddit / hn / forum) and where each company was found |
+| `…_company_triggers.sql` | news triggers on companies (kind, headline, link, date) |
 
 All of them are applied to project `kvhqpgflvvdxxoebgjvv`. New migrations should use
 the same `YYYYMMDDHHMMSS_name.sql` naming.
@@ -146,6 +147,16 @@ and adds each site as a company, then audits it. No manual lists needed:
 | Reddit | business and feedback communities (r/smallbusiness, r/Entrepreneur, r/web_design, r/SEO, r/shopify, r/SaaS, r/sideproject…) for "my website", "my store", "roast", "feedback", "I built", "launched" |
 | Hacker News | "Show HN" launches from the last 30 days, plus "feedback on my website" posts |
 | Communities | Bubble, n8n and Make.com forums: members' posts that mention their site |
+| Company news | TechCrunch, tech.eu, BetaKit, Inc42, PR Newswire and Google News (last 30 days): funding rounds, new CEO/CMO/CTO, hiring pushes, expansions |
+
+**Triggers (why now).** A news headline is parsed into a company and a trigger
+(`lib/sources/companyNews.ts`), e.g. "AI chip maker SambaNova raises $1B" →
+SambaNova, Funding. Its website is found by trying likely domains and accepting
+one only if the site's own title names every word of the company (one-word
+names must also match the headline's topic, so "TODAY raises €2.8M" never
+resolves to today.com); Wikidata is a checked fallback. Investment funds are
+skipped. Recent funding or a new executive adds up to +15 to the score: they
+have budget and a new decision-maker now.
 
 The owner's site is the first link that isn't a platform (Reddit, YouTube,
 GitHub, app stores, link shorteners…). Businesses (stores, services, clients,
@@ -200,8 +211,10 @@ address they published.
 | Automation (AI automation) | no online booking (only for appointment businesses: clinics, salons, restaurants…, judged from the site's title, description, headings and menu), no chat or WhatsApp |
 | App / portal (app development) | no customer login, online ordering or app (only for shops, restaurants, member businesses) |
 
-**Score** (`lib/audit/score.ts`): high 25, medium 12, low 5 for each flaw in an
-area your services cover (capped at 90), +10 when an email or phone was found.
+**Score** (`lib/audit/score.ts`) = pain + trigger + reach: high 25, medium 12,
+low 5 for each flaw in an area your services cover (capped at 75); +15 for
+funding or a new executive in the last 30 days (+10 hiring/expansion, half
+after 30 days, none after 90); +10 when an email or phone was found.
 Changing your services re-scores every company.
 
 ## Data sources

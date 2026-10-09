@@ -6,6 +6,7 @@ import { AddCompanies } from "@/components/clients/AddCompanies";
 import { ScanHub } from "@/components/clients/ScanHub";
 import { CompanyFilters } from "@/components/clients/CompanyFilters";
 import { CompanyTable, type CompanyRow } from "@/components/clients/CompanyTable";
+import { FlawBars, SourceTiles, TopOpportunities, TriggerFeed, type OpportunityCard, type TriggerItem } from "@/components/clients/Panels";
 import { requireSession } from "@/lib/supabase/server";
 import { companyFiltersToQuery, getCompanies, parseCompanyFilters, type Company } from "@/lib/companies";
 import { AREA_LABEL, type Area } from "@/lib/audit/checks";
@@ -60,7 +61,18 @@ function toRow(c: Company): CompanyRow {
     foundUrl: c.found_url ?? "",
     foundTitle: c.found_title ?? "",
     foundAuthor: c.found_author ?? "",
+    triggerKind: c.trigger_kind ?? "",
+    triggerHeadline: c.trigger_headline ?? "",
+    triggerUrl: c.trigger_url ?? "",
   };
+}
+
+function bestContact(c: Company): { contact: string; contactHref: string } {
+  if (c.emails?.[0]) return { contact: c.emails[0], contactHref: `mailto:${c.emails[0]}` };
+  if (c.phone) return { contact: c.phone, contactHref: `tel:${c.phone}` };
+  if (c.contact_page) return { contact: "Contact form", contactHref: c.contact_page };
+  if (c.found_url) return { contact: "Reply to their post", contactHref: c.found_url };
+  return { contact: "", contactHref: "" };
 }
 
 export default async function FindClientsPage({
@@ -74,8 +86,11 @@ export default async function FindClientsPage({
   let icp = "";
   let companies: Company[] = [];
   let pending = 0;
-  let stats = { total: 0, withEmail: 0, strong: 0 };
-  let blips: Array<{ id: string; name: string; domain: string; score: number }> = [];
+  let stats = { total: 0, withEmail: 0, strong: 0, triggers: 0, onRadar: 0 };
+  let blips: Array<{ id: string; name: string; domain: string; score: number; trigger?: string }> = [];
+  let cards: OpportunityCard[] = [];
+  let triggerItems: TriggerItem[] = [];
+  let flawRows: Array<{ label: string; count: number }> = [];
   let lastScan: string | null = null;
   let everScanned = false;
   let error: string | null = null;
@@ -85,13 +100,13 @@ export default async function FindClientsPage({
       supabase.from("orgs").select("services, icp").eq("id", orgId).maybeSingle(),
       getCompanies(supabase, filters),
       supabase.from("companies").select("id", { count: "exact", head: true }).eq("status", "new"),
-      supabase.from("companies").select("score, emails").in("status", ["audited"]).limit(5000),
       supabase
         .from("companies")
-        .select("id, name, domain, score, status")
+        .select("id, name, domain, website, score, flaws, services_matched, emails, phone, contact_page, found_url, trigger_kind, trigger_headline, trigger_url, trigger_at, status")
         .in("status", ["new", "audited"])
         .order("score", { ascending: false })
-        .limit(160),
+        .limit(1000),
+      Promise.resolve(null),
       supabase
         .from("crawl_runs")
         .select("finished_at, started_at")
@@ -99,12 +114,57 @@ export default async function FindClientsPage({
         .order("started_at", { ascending: false })
         .limit(1),
     ]);
-    blips = ((radarRes.data ?? []) as Array<{ id: string; name: string; domain: string; score: number; status: string }>).map((b) => ({
+    void radarRes;
+    const all = (statsRes.data ?? []) as Company[];
+    const audited = all.filter((c) => c.status === "audited");
+    blips = all.slice(0, 160).map((b) => ({
       id: b.id,
       name: b.name || b.domain,
       domain: b.domain,
       score: b.status === "new" ? -1 : b.score,
+      trigger: b.trigger_kind || undefined,
     }));
+    stats = {
+      onRadar: all.length,
+      total: audited.length,
+      withEmail: audited.filter((r) => r.emails?.length).length,
+      strong: audited.filter((r) => r.score >= 60).length,
+      triggers: all.filter((r) => r.trigger_kind).length,
+    };
+    const SEV = { high: 0, medium: 1, low: 2 } as const;
+    cards = audited.slice(0, 3).map((c) => ({
+      id: c.id,
+      name: c.name,
+      domain: c.domain,
+      website: c.website,
+      score: c.score,
+      flaws: [...(c.flaws ?? [])].sort((a, b) => SEV[a.severity] - SEV[b.severity]),
+      services: c.services_matched ?? [],
+      ...bestContact(c),
+      triggerKind: c.trigger_kind ?? "",
+      triggerHeadline: c.trigger_headline ?? "",
+      triggerUrl: c.trigger_url ?? "",
+    }));
+    triggerItems = all
+      .filter((c) => c.trigger_kind)
+      .sort((a, b) => (b.trigger_at ?? "").localeCompare(a.trigger_at ?? ""))
+      .slice(0, 25)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        domain: c.domain,
+        kind: c.trigger_kind,
+        headline: c.trigger_headline,
+        url: c.trigger_url,
+        at: c.trigger_at,
+        score: c.score,
+      }));
+    const counts = new Map<string, number>();
+    for (const c of audited) for (const f of c.flaws ?? []) counts.set(f.title, (counts.get(f.title) ?? 0) + 1);
+    flawRows = [...counts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 7);
     const lastRun = (runRes.data ?? [])[0] as { finished_at: string | null; started_at: string } | undefined;
     lastScan = lastRun ? lastRun.finished_at ?? lastRun.started_at : null;
     everScanned = Boolean(lastRun);
@@ -113,12 +173,6 @@ export default async function FindClientsPage({
     icp = (orgRes.data?.icp as string | undefined) ?? "";
     companies = list;
     pending = pendingRes.count ?? 0;
-    const rows = (statsRes.data ?? []) as Array<{ score: number; emails: string[] }>;
-    stats = {
-      total: rows.length,
-      withEmail: rows.filter((r) => r.emails?.length).length,
-      strong: rows.filter((r) => r.score >= 60).length,
-    };
   } catch (err) {
     error = err instanceof Error ? err.message : "Could not load companies";
   }
@@ -128,7 +182,7 @@ export default async function FindClientsPage({
 
   return (
     <>
-      <Topbar title="Find clients" tag={onboarding ? "step 1 of 2" : `${stats.total} audited`}>
+      <Topbar title="Radar" tag={onboarding ? "step 1 of 2" : `${stats.onRadar} companies`}>
         {!onboarding && !error ? (
           <a href={`/api/export/companies?${companyFiltersToQuery(filters)}`} className="ch-btn text-[13px]">
             Export all shown
@@ -152,7 +206,6 @@ export default async function FindClientsPage({
               lastScan={lastScan}
               autoStart={!everScanned && blips.length === 0}
             />
-            <ServicesSetup onboarding={false} initial={{ services, icp }} />
             <details className="group">
               <summary className="cursor-pointer text-[13px] font-semibold" style={{ color: "var(--color-brand)" }}>
                 Know a company already? Add its website yourself
@@ -162,21 +215,26 @@ export default async function FindClientsPage({
               </div>
             </details>
 
-            {stats.total > 0 ? (
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  ["Audited", stats.total],
-                  ["With an email", stats.withEmail],
-                  ["Score 60+", stats.strong],
-                ].map(([label, value]) => (
-                  <div key={label as string} className="ch-card py-3">
-                    <b className="block text-xl leading-none font-semibold">{value}</b>
-                    <span className="text-[12px]" style={{ color: "var(--color-muted)" }}>{label}</span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+            <SourceTiles
+              tiles={[
+                { label: "On radar", value: stats.onRadar, hint: `${stats.total} audited so far` },
+                { label: "Strong opportunities", value: stats.strong, hint: "score 60 or more" },
+                { label: "In the news", value: stats.triggers, hint: "funding, new leader, hiring" },
+                { label: "Reachable by email", value: stats.withEmail, hint: "public address on their site" },
+              ]}
+            />
 
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <TopOpportunities cards={cards} />
+              <TriggerFeed items={triggerItems} />
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-2">
+              <FlawBars rows={flawRows} total={stats.total} />
+              <ServicesSetup onboarding={false} initial={{ services, icp }} />
+            </div>
+
+            <h2 className="ch-label pt-2">All companies</h2>
             <Suspense>
               <CompanyFilters services={services} flaws={FLAW_OPTIONS} />
             </Suspense>

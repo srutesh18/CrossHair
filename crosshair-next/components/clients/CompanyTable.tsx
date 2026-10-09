@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { TriggerBadge } from "./Panels";
 
 export interface FlawView {
   key: string;
@@ -34,12 +35,16 @@ export interface CompanyRow {
   foundUrl: string;
   foundTitle: string;
   foundAuthor: string;
+  triggerKind: string;
+  triggerHeadline: string;
+  triggerUrl: string;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
   reddit: "Reddit",
   hn: "Hacker News",
   forum: "Community",
+  news: "News",
   google_places: "Google",
   manual: "Added by you",
   csv: "CSV",
@@ -259,7 +264,7 @@ export function CompanyTable({ rows }: { rows: CompanyRow[] }) {
       ) : null}
 
       <div className="overflow-x-auto rounded-[14px] border" style={{ borderColor: "var(--color-line)", background: "var(--color-surface)" }}>
-        <table className="w-full min-w-[920px] text-left text-sm">
+        <table className="w-full min-w-[1080px] text-left text-sm">
           <thead className="text-[11px] tracking-wide" style={{ color: "var(--color-muted)", background: "var(--color-raise)" }}>
             <tr>
               <th className="w-10 px-3 py-2.5">
@@ -277,7 +282,8 @@ export function CompanyTable({ rows }: { rows: CompanyRow[] }) {
               </th>
               <th className="w-20 px-2 py-2.5"><SortHead k="score" label="Score" /></th>
               <th className="w-56 px-2 py-2.5 font-semibold uppercase">Company</th>
-              <th className="px-2 py-2.5 font-semibold uppercase">Flaws found</th>
+              <th className="px-2 py-2.5 font-semibold uppercase">Flaws found (pain)</th>
+              <th className="w-44 px-2 py-2.5 font-semibold uppercase">Why now (trigger)</th>
               <th className="w-36 px-2 py-2.5 font-semibold uppercase">Fix with</th>
               <th className="w-48 px-2 py-2.5 font-semibold uppercase">Contact</th>
               <th className="w-32 px-2 py-2.5"><SortHead k="recent" label="Found" /></th>
@@ -342,6 +348,16 @@ export function CompanyTable({ rows }: { rows: CompanyRow[] }) {
                         </div>
                       )}
                     </td>
+                    <td className="max-w-0 px-2 py-3 text-[12px]" onClick={(e) => e.stopPropagation()}>
+                      {r.triggerKind ? (
+                        <a href={r.triggerUrl} target="_blank" rel="noopener noreferrer" title={r.triggerHeadline} className="block space-y-1">
+                          <TriggerBadge kind={r.triggerKind} />
+                          <span className="line-clamp-2 block hover:underline" style={{ color: "var(--color-muted)" }}>{r.triggerHeadline}</span>
+                        </a>
+                      ) : (
+                        <span style={{ color: "var(--color-muted)" }}>No recent news</span>
+                      )}
+                    </td>
                     <td className="px-2 py-3 text-[12px]">
                       {r.services.map((s) => (
                         <span key={s} className="ch-tag mr-1 mb-1 inline-block">{s}</span>
@@ -364,7 +380,7 @@ export function CompanyTable({ rows }: { rows: CompanyRow[] }) {
                   {expanded ? (
                     <tr className="border-t" style={{ borderColor: "var(--color-line)", background: "var(--color-raise)" }}>
                       <td />
-                      <td colSpan={6} className="px-2 py-4">
+                      <td colSpan={7} className="px-2 py-4">
                         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
                           <div>
                             <h3 className="ch-label mb-2">Everything found on {r.domain || r.name}</h3>

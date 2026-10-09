@@ -5,7 +5,7 @@ import { DISCOVERY_SOURCES, runDiscovery } from "@/lib/discovery";
 import { errorResponse } from "@/lib/api";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 const Body = z.object({
   sources: z.array(z.enum(DISCOVERY_SOURCES)).min(1).default([...DISCOVERY_SOURCES]),
