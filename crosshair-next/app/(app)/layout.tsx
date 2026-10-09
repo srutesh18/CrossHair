@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 const NAV = [
   { href: "/finder", label: "Radar" },
   { href: "/pipeline", label: "Pipeline" },
-  { href: "/setup", label: "Setup" },
+  { href: "/templates", label: "Templates" },
 ];
 
 async function currentEmail(): Promise<string | null> {

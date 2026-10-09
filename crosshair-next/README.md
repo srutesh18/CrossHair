@@ -74,6 +74,7 @@ also paste each file into the Supabase SQL editor, in order.
 | `…_companies.sql` | `companies` table (RLS): website, contacts, flaws with evidence, score, status |
 | `…_company_discovery.sql` | discovery sources (reddit / hn / forum) and where each company was found |
 | `…_company_triggers.sql` | news triggers on companies (kind, headline, link, date) |
+| `…_outreach_pipeline.sql` | `outreach` (stage, next step, next action date, notes) and `outreach_emails` (every email sent), RLS; templates and signature on orgs |
 
 All of them are applied to project `kvhqpgflvvdxxoebgjvv`. New migrations should use
 the same `YYYYMMDDHHMMSS_name.sql` naming.
@@ -216,6 +217,34 @@ low 5 for each flaw in an area your services cover (capped at 75); +15 for
 funding or a new executive in the last 30 days (+10 hiring/expansion, half
 after 30 days, none after 90); +10 when an email or phone was found.
 Changing your services re-scores every company.
+
+## Pipeline & email (`/pipeline`)
+
+On the Radar, tick companies and press **Add to pipeline & email**. The board has
+five columns: **To contact → Follow-up due → Waiting → Replied → Won / lost**.
+
+Click a company to open the composer:
+- the email for **Day 0 / Day 3 / Day 7**, written from its real flaws (with
+  evidence) and its news trigger, fully editable;
+- **Send now** when SMTP is configured, or **Open in Gmail / Outlook / your
+  email app** (a ready draft) and then **"Yes, I sent it"** to log it;
+- sending a step schedules the next one (Day 3 after 3 days, Day 7 after 4
+  more); **They replied / Won / Lost** stop the follow-ups; history and notes
+  are kept per company.
+
+## Templates (`/templates`)
+
+Edit the 3-step sequence, your name, company and signature, with a live preview
+written for one of your real audited companies. Variables: `{{company}}`,
+`{{domain}}`, `{{trigger}}`, `{{flaw_1}}`, `{{evidence_1}}`, `{{flaw_1_lower}}`,
+`{{flaw_2}}`, `{{evidence_2}}`, `{{services}}`, `{{sender}}`, `{{signature}}`;
+`{{#trigger}}…{{/trigger}}` shows only when there is news, `{{^trigger}}…{{/trigger}}`
+only when not. Every default email ends with an opt-out line.
+
+Direct sending needs `SEND_ENABLED=true`, `SMTP_HOST`, `SMTP_PORT`,
+`SMTP_USER`, `SMTP_PASS` (Gmail: an app password), `SEND_FROM` and
+`UNSUBSCRIBE_URL` in `.env.local`. Without them the Gmail / Outlook / email-app
+buttons work out of the box.
 
 ## Data sources
 

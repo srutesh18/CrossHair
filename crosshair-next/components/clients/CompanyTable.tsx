@@ -50,14 +50,9 @@ const SOURCE_LABEL: Record<string, string> = {
   csv: "CSV",
 };
 
-type Channel = "email" | "call" | "linkedin";
+type Channel = "call" | "linkedin";
 
 const CHANNELS: Record<Channel, { title: string; via: string; body: string }> = {
-  email: {
-    title: "Email automation",
-    via: "your email provider",
-    body: "Send each selected company a personalised email built from the flaws found on their site (\"your homepage takes 8s on mobile…\"), with a Day 3 and Day 7 follow-up, after you approve them.",
-  },
   call: {
     title: "Call automation",
     via: "Sarvam AI voice",
@@ -208,6 +203,14 @@ export function CompanyTable({ rows }: { rows: CompanyRow[] }) {
     }
   }
 
+  async function addToPipeline() {
+    const res = await bulk("pipeline", { url: "/api/pipeline", method: "POST", body: JSON.stringify({ companyIds: chosen }) });
+    if (res) {
+      setSelected(new Set());
+      router.push("/pipeline");
+    }
+  }
+
   async function remove() {
     if (!window.confirm(`Delete ${chosen.length} compan${chosen.length === 1 ? "y" : "ies"}? This cannot be undone.`)) return;
     const res = await bulk("delete", { url: "/api/companies", method: "DELETE", body: JSON.stringify({ ids: chosen }) });
@@ -243,7 +246,14 @@ export function CompanyTable({ rows }: { rows: CompanyRow[] }) {
           <button type="button" className="ch-btn text-[13px]" disabled={busy !== null} onClick={() => void exportSelected()}>
             {busy === "export" ? "Exporting…" : "Export selected"}
           </button>
-          <button type="button" className="ch-btn text-[13px]" onClick={() => setWip("email")}>Email</button>
+          <button
+            type="button"
+            className="ch-btn ch-btn-primary text-[13px]"
+            disabled={busy !== null}
+            onClick={() => void addToPipeline()}
+          >
+            {busy === "pipeline" ? "Adding…" : "Add to pipeline & email"}
+          </button>
           <button type="button" className="ch-btn text-[13px]" onClick={() => setWip("call")}>Call (Sarvam)</button>
           <button type="button" className="ch-btn text-[13px]" onClick={() => setWip("linkedin")}>LinkedIn DM (n8n)</button>
           {showingClosed ? (

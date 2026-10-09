@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SUPABASE_PUBLIC_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 
-const PROTECTED = ["/radar", "/finder", "/signals", "/news", "/companies", "/pipeline", "/setup"];
+const PROTECTED = ["/radar", "/finder", "/templates", "/signals", "/news", "/companies", "/pipeline", "/setup"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
