@@ -1,0 +1,49 @@
+{
+  "name": "crosshair-next",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "embed:docs": "tsx --conditions=react-server --env-file=.env.local scripts/embed-docs.ts",
+    "db:migrate": "tsx --env-file=.env.local scripts/migrate.ts",
+    "db:status": "tsx --env-file=.env.local scripts/migrate.ts --status",
+    "crawl:preview": "tsx --conditions=react-server --env-file=.env.local scripts/crawl-preview.ts"
+  },
+  "dependencies": {
+    "@crawlee/cheerio": "^3.18.2",
+    "@huggingface/transformers": "^3.0.0",
+    "@react-pdf/renderer": "^4.0.0",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.45.0",
+    "cheerio": "^1.0.0",
+    "exceljs": "^4.4.0",
+    "next": "^15.1.0",
+    "nodemailer": "^6.9.15",
+    "papaparse": "^5.4.1",
+    "pg": "^8.23.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "rss-parser": "^3.13.0",
+    "server-only": "^0.0.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.0.0",
+    "@types/nodemailer": "^6.4.16",
+    "@types/papaparse": "^5.3.14",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20.6"
+  }
+}

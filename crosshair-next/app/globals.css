@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+/* Palette ported from crosshair_pro.html: warm paper, vermilion, ink sidebar. */
+@theme {
+  --color-bg: #f8f7f4;
+  --color-surface: #ffffff;
+  --color-raise: #f2f1ed;
+  --color-fg: #1f2433;
+  --color-muted: #6b6a62;
+  --color-line: #e7e5de;
+  --color-side: #1f2433;
+  --color-side-fg: #c4bda9;
+  --color-brand: #d2441f;
+  --color-brand-fg: #ffffff;
+  --color-brand-soft: #fbe3d8;
+  --color-mint: #1b7a55;
+  --color-mint-bg: #d8efe3;
+  --color-amber: #96600a;
+  --color-amber-bg: #f8e8c4;
+  --color-coral: #b3261e;
+  --color-coral-bg: #f9dcd8;
+  --color-idle: #6a6454;
+  --color-idle-bg: #ebe9e2;
+
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --font-display: "Bricolage Grotesque", var(--font-body);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+@layer components {
+  .ch-btn {
+    @apply inline-flex items-center gap-2 rounded-[9px] border px-4 py-2 text-sm font-semibold transition;
+    border-color: var(--color-line);
+    background: var(--color-surface);
+    color: var(--color-fg);
+  }
+  .ch-btn:hover { border-color: var(--color-muted); }
+  .ch-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .ch-btn-primary {
+    background: var(--color-brand);
+    border-color: var(--color-brand);
+    color: var(--color-brand-fg);
+  }
+  .ch-btn-primary:hover { filter: brightness(1.08); border-color: var(--color-brand); }
+
+  .ch-card {
+    @apply rounded-[14px] border p-4;
+    border-color: var(--color-line);
+    background: var(--color-surface);
+  }
+
+  .ch-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap;
+  }
+  .ch-pill::before {
+    content: "";
+    @apply h-1.5 w-1.5 rounded-full;
+    background: currentColor;
+  }
+  .ch-pill-hot   { background: var(--color-mint-bg);  color: var(--color-mint); }
+  .ch-pill-warm  { background: #fbe9d0;               color: #9a5200; }
+  .ch-pill-hold  { background: var(--color-idle-bg);  color: var(--color-idle); }
+  .ch-pill-sent  { background: var(--color-amber-bg); color: var(--color-amber); }
+
+  .ch-tag {
+    @apply rounded-[5px] border px-2 py-0.5 text-[11px];
+    font-family: var(--font-mono);
+    color: var(--color-muted);
+    border-color: var(--color-line);
+  }
+
+  .ch-label {
+    @apply text-[11px] uppercase tracking-[0.07em];
+    font-family: var(--font-mono);
+    color: var(--color-muted);
+  }
+
+  .ch-input {
+    @apply w-full rounded-[9px] border px-3 py-2 outline-none;
+    background: var(--color-bg);
+    border-color: var(--color-line);
+  }
+  .ch-input:focus { border-color: var(--color-brand); outline: 2px solid var(--color-brand); }
+
+  .ch-meter { @apply flex gap-1; }
+  .ch-meter i { @apply h-1.5 flex-1 rounded-sm; background: var(--color-line); }
+  .ch-meter-strong i { background: var(--color-mint); }
+  .ch-meter-fair i:nth-child(-n + 2) { background: var(--color-amber); }
+  .ch-meter-none i:nth-child(-n + 1) { background: var(--color-coral); }
+}

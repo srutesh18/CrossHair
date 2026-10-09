@@ -1,0 +1,32 @@
+# --- Secrets: never commit real env files ---
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# --- Dependencies and build output ---
+node_modules/
+.next/
+.next-check/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# --- Local caches (embedding model, Crawlee storage) ---
+.cache/
+models/
+storage/
+
+# --- Local tooling config (per-developer) ---
+.claude/
+.mcp.json
+
+# --- Earlier prototype and static demo (kept locally, not part of the app) ---
+backend/
+crosshair_pro.html
+
+# --- OS / editor ---
+.DS_Store
+*.log
