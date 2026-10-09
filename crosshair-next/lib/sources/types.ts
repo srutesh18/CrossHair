@@ -5,6 +5,8 @@ export interface PublicPost {
   title?: string;
   /** The user's service this source is about (e.g. an n8n forum -> "ai automation"). */
   serviceHint?: string;
+  /** External links in the post (the poster's own website, usually). */
+  links?: string[];
   said: string;
   sourceName: string;
   sourceUrl: string;
@@ -25,4 +27,14 @@ export function htmlToText(html: string): string {
     .replace(/&#32;|&nbsp;/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Every http(s) link in an HTML fragment, decoded. */
+export function linksIn(html: string): string[] {
+  const decoded = html.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x2F;/g, "/").replace(/&#39;/g, "'");
+  const out = new Set<string>();
+  for (const m of decoded.matchAll(/href="(https?:\/\/[^"]+)"/gi)) if (m[1]) out.add(m[1]);
+  // Bare domains written in text ("check out waybill.supply").
+  for (const m of decoded.replace(/<[^>]+>/g, " ").matchAll(/\bhttps?:\/\/[^\s<>"')\]]+/gi)) out.add(m[0]);
+  return [...out];
 }

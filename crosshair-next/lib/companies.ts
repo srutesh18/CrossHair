@@ -8,12 +8,18 @@ import { nameFromDomain, normaliseWebsite } from "./audit/url";
 
 export type CompanyStatus = "new" | "audited" | "failed" | "contacted" | "dismissed";
 
+export type CompanySource = "manual" | "csv" | "google_places" | "reddit" | "hn" | "forum";
+
 export interface Company {
   id: string;
   name: string;
   website: string;
   domain: string;
-  source: "manual" | "csv" | "google_places";
+  source: CompanySource;
+  found_url: string;
+  found_title: string;
+  found_author: string;
+  found_at: string | null;
   search_query: string;
   address: string;
   category: string;
@@ -44,6 +50,10 @@ export interface NewCompany {
   rating_count?: number | null;
   phone?: string;
   emails?: string[];
+  found_url?: string;
+  found_title?: string;
+  found_author?: string;
+  found_at?: string | null;
 }
 
 /**
@@ -154,11 +164,23 @@ async function auditOne(supabase: SupabaseClient, company: Company, services: st
       return;
     }
     const emails = [...new Set([...company.emails, ...result.contacts.emails])].slice(0, 6);
+    // Discovered companies are named after their domain; the site's own title
+    // ("Waybill | Canada Post labels") usually has the real brand name.
+    // Pick the title segment that looks like a brand, skipping generic ones.
+    const GENERIC = /^(home|homepage|welcome|age check|index|official site|official website)$/i;
+    const brand =
+      result.pageTitle
+        .split(/\s[|–—·•-]\s|:\s|\s·\s/)
+        .map((p) => p.trim())
+        .find((p) => p && !GENERIC.test(p)) ?? "";
+    const name =
+      company.name === nameFromDomain(company.domain) && brand.length >= 2 && brand.length <= 40 ? brand : company.name;
     const phone = company.phone || result.contacts.phones[0] || "";
     const { score, servicesMatched } = scoreCompany(result.flaws, services, emails.length > 0 || Boolean(phone));
     const { error } = await supabase
       .from("companies")
       .update({
+        name,
         flaws: result.flaws,
         emails,
         phone,

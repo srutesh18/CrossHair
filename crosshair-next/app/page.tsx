@@ -1,12 +1,12 @@
 import Link from "next/link";
 
 const STEPS = [
-  ["Setup", "Your product, 2-3 competitors, docs, target customer"],
-  ["Pain scan", "Finds public complaints, extracts person, company, pain type"],
-  ["Trigger check", "Looks for real events at that company"],
-  ["Qualify", "Scores the lead: Hot, Warm or Hold"],
-  ["Write", "Matches the complaint to a real feature (RAG), drafts the email"],
-  ["Follow up", "Day 3 proof, Day 7 close. A second pass checks every claim"],
+  ["Tell it what you sell", "Web design, SEO, app development, AI automation, or anything else"],
+  ["It scans by itself", "Reddit, Hacker News and community forums, for owners sharing their own websites"],
+  ["Audits every site", "HTTPS, mobile, speed, broken links, SEO gaps, no online booking, with evidence"],
+  ["Finds how to reach them", "Public emails, phones, contact forms and socials from their own site"],
+  ["Ranks the opportunities", "Scored by how much of what's wrong your services fix"],
+  ["You pick who to contact", "Filter, select, export. Email, call and LinkedIn automation coming"],
 ];
 
 export default function Landing() {
@@ -47,14 +47,14 @@ export default function Landing() {
                   className="h-1.5 w-1.5 rounded-full"
                   style={{ background: "var(--color-brand)" }}
                 />
-                An AI sales agent that knows when not to send
+                Finds clients whose websites need you
               </span>
               <h1 className="mb-4 text-[clamp(2.3rem,5.4vw,3.8rem)] leading-[1.04] font-bold tracking-tight">
-                Stop spraying. <em className="not-italic" style={{ color: "var(--color-brand)" }}>Start sniping.</em>
+                Find the flaws. <em className="not-italic" style={{ color: "var(--color-brand)" }}>Win the client.</em>
               </h1>
               <p className="mb-7 max-w-[44ch] text-lg" style={{ color: "var(--color-muted)" }}>
-                Crosshair reads public complaints about your competitors, watches what changes at
-                each company, and only then writes the email.
+                Crosshair finds businesses on its own, audits their websites for the problems you
+                fix, and tells you exactly how to reach them, with proof for every pitch.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link href="/finder" className="ch-btn ch-btn-primary px-6 py-3 text-[15px]">
@@ -68,9 +68,9 @@ export default function Landing() {
 
             <div className="grid gap-3">
               {[
-                ["All three Strong", "HOT", "Email drafted, grounded in your docs", "ch-pill-hot"],
-                ["Exactly one Fair", "WARM", "A softer email, no hard ask", "ch-pill-warm"],
-                ["Any None, or two Fair", "HOLD", "No email. Watching for a trigger.", "ch-pill-hold"],
+                ["Not mobile-friendly · slow · no HTTPS", "WEB", "Pitch a redesign, with their load time as proof", "ch-pill-hot"],
+                ["No meta description · no sitemap", "SEO", "Pitch SEO, with the exact gaps listed", "ch-pill-warm"],
+                ["No online booking · no chat", "AI", "Pitch automation for their front desk", "ch-pill-hold"],
               ].map(([rule, tier, note, pill]) => (
                 <div key={tier} className="ch-card flex items-center gap-4">
                   <span className={`ch-pill ${pill}`}>{tier}</span>
@@ -87,9 +87,9 @@ export default function Landing() {
 
       <div className="px-5" id="how">
         <div className="mx-auto max-w-[1160px] py-14">
-          <h2 className="mb-2 text-2xl font-bold tracking-tight">Six steps. One decision.</h2>
+          <h2 className="mb-2 text-2xl font-bold tracking-tight">Six steps. Mostly automatic.</h2>
           <p className="mb-7" style={{ color: "var(--color-muted)" }}>
-            From a public complaint to a send or a hold, automatically.
+            From a public post to a company you can pitch with evidence.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {STEPS.map(([title, body], i) => (
@@ -106,8 +106,8 @@ export default function Landing() {
             className="mt-12 flex flex-wrap justify-between gap-2 border-t pt-5 text-[13px]"
             style={{ borderColor: "var(--color-line)", color: "var(--color-muted)" }}
           >
-            <span>Crosshair &middot; also known as Churn Sniper</span>
-            <span>Public data only &middot; draft mode, nothing is really sent</span>
+            <span>Crosshair</span>
+            <span>Public data only &middot; nothing is sent without you</span>
           </footer>
         </div>
       </div>

@@ -14,6 +14,8 @@ export interface AuditResult {
   contacts: Contacts;
   /** The site refused automated visits (robots.txt): nothing was audited. */
   blocked: boolean;
+  /** The homepage <title>, for naming companies found by their domain. */
+  pageTitle: string;
 }
 
 /** True when robots.txt disallows the whole site for every crawler. */
@@ -140,7 +142,7 @@ export async function auditWebsite(website: string): Promise<AuditResult> {
   const contacts = emptyContacts();
   const origin = new URL(website).origin;
 
-  if (await blockedByRobots(origin)) return { flaws: [], contacts, blocked: true };
+  if (await blockedByRobots(origin)) return { flaws: [], contacts, blocked: true, pageTitle: "" };
 
   // Try https first; a site that only answers on http is itself a finding.
   let page: PageFacts | null = null;
@@ -158,7 +160,7 @@ export async function auditWebsite(website: string): Promise<AuditResult> {
           : "The site could not be reached.";
     }
   }
-  if (!page) return { flaws: [siteDownFlaw(lastError)], contacts, blocked: false };
+  if (!page) return { flaws: [siteDownFlaw(lastError)], contacts, blocked: false, pageTitle: "" };
 
   const $ = cheerio.load(page.html);
   extractContacts($, page.finalUrl, contacts);
@@ -172,5 +174,5 @@ export async function auditWebsite(website: string): Promise<AuditResult> {
 
   const flaws = checkHomepage($, page, { brokenLinks: broken, hasSitemap: sitemap, hasContact });
   if (speed) flaws.push(speed);
-  return { flaws, contacts, blocked: false };
+  return { flaws, contacts, blocked: false, pageTitle: $("title").first().text().replace(/\s+/g, " ").trim() };
 }

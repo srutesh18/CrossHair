@@ -30,7 +30,20 @@ export interface CompanyRow {
   socials: Record<string, string>;
   status: "new" | "audited" | "failed" | "contacted" | "dismissed";
   auditError: string;
+  source: string;
+  foundUrl: string;
+  foundTitle: string;
+  foundAuthor: string;
 }
+
+const SOURCE_LABEL: Record<string, string> = {
+  reddit: "Reddit",
+  hn: "Hacker News",
+  forum: "Community",
+  google_places: "Google",
+  manual: "Added by you",
+  csv: "CSV",
+};
 
 type Channel = "email" | "call" | "linkedin";
 
@@ -107,6 +120,14 @@ function Contact({ r }: { r: CompanyRow }) {
     return (
       <a href={r.contactPage} target="_blank" rel="noopener noreferrer" className="block truncate underline" style={{ color: "var(--color-brand)" }}>
         Contact form
+      </a>
+    );
+  }
+  if (r.foundUrl) {
+    // They posted publicly asking for opinions: replying there is welcome.
+    return (
+      <a href={r.foundUrl} target="_blank" rel="noopener noreferrer" className="block truncate underline" style={{ color: "var(--color-brand)" }}>
+        Reply to their post
       </a>
     );
   }
@@ -258,8 +279,8 @@ export function CompanyTable({ rows }: { rows: CompanyRow[] }) {
               <th className="w-56 px-2 py-2.5 font-semibold uppercase">Company</th>
               <th className="px-2 py-2.5 font-semibold uppercase">Flaws found</th>
               <th className="w-36 px-2 py-2.5 font-semibold uppercase">Fix with</th>
-              <th className="w-52 px-2 py-2.5 font-semibold uppercase">Contact</th>
-              <th className="w-20 px-2 py-2.5"><SortHead k="recent" label="Added" /></th>
+              <th className="w-48 px-2 py-2.5 font-semibold uppercase">Contact</th>
+              <th className="w-32 px-2 py-2.5"><SortHead k="recent" label="Found" /></th>
             </tr>
           </thead>
           <tbody>
@@ -329,8 +350,15 @@ export function CompanyTable({ rows }: { rows: CompanyRow[] }) {
                     <td className="max-w-0 px-2 py-3 text-[13px]" onClick={(e) => e.stopPropagation()}>
                       <Contact r={r} />
                     </td>
-                    <td className="px-2 py-3 text-[12px]" style={{ color: "var(--color-muted)" }}>
-                      <span aria-hidden>{expanded ? "▲" : "▼"}</span>
+                    <td className="max-w-0 px-2 py-3 text-[12px]" onClick={(e) => e.stopPropagation()}>
+                      {r.foundUrl ? (
+                        <a href={r.foundUrl} target="_blank" rel="noopener noreferrer" className="block truncate hover:underline" title={r.foundTitle}>
+                          {SOURCE_LABEL[r.source] ?? r.source}
+                        </a>
+                      ) : (
+                        <span className="block truncate">{SOURCE_LABEL[r.source] ?? r.source}</span>
+                      )}
+                      <span className="block truncate" style={{ color: "var(--color-muted)" }}>{r.foundAuthor}</span>
                     </td>
                   </tr>
                   {expanded ? (
@@ -366,6 +394,15 @@ export function CompanyTable({ rows }: { rows: CompanyRow[] }) {
                               <a key={k} href={v} target="_blank" rel="noopener noreferrer" className="block truncate capitalize underline" style={{ color: "var(--color-brand)" }}>{k}</a>
                             ))}
                             {r.address ? <p style={{ color: "var(--color-muted)" }}>{r.address}</p> : null}
+                            {r.foundUrl ? (
+                              <>
+                                <h3 className="ch-label mt-3 mb-1">Where we found them</h3>
+                                <a href={r.foundUrl} target="_blank" rel="noopener noreferrer" className="block underline" style={{ color: "var(--color-brand)" }}>
+                                  {SOURCE_LABEL[r.source] ?? r.source} post by {r.foundAuthor || "the owner"}
+                                </a>
+                                <p className="line-clamp-3" style={{ color: "var(--color-muted)" }}>{r.foundTitle}</p>
+                              </>
+                            ) : null}
                             {r.website ? (
                               <button type="button" className="ch-btn mt-2 text-[12px]" disabled={busy !== null} onClick={() => void reaudit(r.id)}>
                                 {busy === `reaudit:${r.id}` ? "Re-auditing…" : "Re-audit"}

@@ -3,7 +3,7 @@ import { Topbar } from "@/components/ui/Topbar";
 import { EmptyState, ErrorState } from "@/components/ui/States";
 import { ServicesSetup } from "@/components/clients/ServicesSetup";
 import { AddCompanies } from "@/components/clients/AddCompanies";
-import { AuditRunner } from "@/components/clients/AuditRunner";
+import { ScanHub } from "@/components/clients/ScanHub";
 import { CompanyFilters } from "@/components/clients/CompanyFilters";
 import { CompanyTable, type CompanyRow } from "@/components/clients/CompanyTable";
 import { requireSession } from "@/lib/supabase/server";
@@ -56,6 +56,10 @@ function toRow(c: Company): CompanyRow {
     socials: c.socials ?? {},
     status: c.status,
     auditError: c.audit_error,
+    source: c.source,
+    foundUrl: c.found_url ?? "",
+    foundTitle: c.found_title ?? "",
+    foundAuthor: c.found_author ?? "",
   };
 }
 
@@ -71,15 +75,39 @@ export default async function FindClientsPage({
   let companies: Company[] = [];
   let pending = 0;
   let stats = { total: 0, withEmail: 0, strong: 0 };
+  let blips: Array<{ id: string; name: string; domain: string; score: number }> = [];
+  let lastScan: string | null = null;
+  let everScanned = false;
   let error: string | null = null;
   try {
     const { supabase, orgId } = await requireSession();
-    const [orgRes, list, pendingRes, statsRes] = await Promise.all([
+    const [orgRes, list, pendingRes, statsRes, radarRes, runRes] = await Promise.all([
       supabase.from("orgs").select("services, icp").eq("id", orgId).maybeSingle(),
       getCompanies(supabase, filters),
       supabase.from("companies").select("id", { count: "exact", head: true }).eq("status", "new"),
       supabase.from("companies").select("score, emails").in("status", ["audited"]).limit(5000),
+      supabase
+        .from("companies")
+        .select("id, name, domain, score, status")
+        .in("status", ["new", "audited"])
+        .order("score", { ascending: false })
+        .limit(160),
+      supabase
+        .from("crawl_runs")
+        .select("finished_at, started_at")
+        .eq("query", "auto-discovery")
+        .order("started_at", { ascending: false })
+        .limit(1),
     ]);
+    blips = ((radarRes.data ?? []) as Array<{ id: string; name: string; domain: string; score: number; status: string }>).map((b) => ({
+      id: b.id,
+      name: b.name || b.domain,
+      domain: b.domain,
+      score: b.status === "new" ? -1 : b.score,
+    }));
+    const lastRun = (runRes.data ?? [])[0] as { finished_at: string | null; started_at: string } | undefined;
+    lastScan = lastRun ? lastRun.finished_at ?? lastRun.started_at : null;
+    everScanned = Boolean(lastRun);
     if (orgRes.error) throw new Error(orgRes.error.message);
     services = (orgRes.data?.services as string[] | undefined) ?? [];
     icp = (orgRes.data?.icp as string | undefined) ?? "";
@@ -117,9 +145,22 @@ export default async function FindClientsPage({
           </div>
         ) : (
           <div className="space-y-3">
+            <ScanHub
+              blips={blips}
+              services={services}
+              pending={pending}
+              lastScan={lastScan}
+              autoStart={!everScanned && blips.length === 0}
+            />
             <ServicesSetup onboarding={false} initial={{ services, icp }} />
-            <AddCompanies googleEnabled={placesEnabled()} />
-            <AuditRunner pending={pending} />
+            <details className="group">
+              <summary className="cursor-pointer text-[13px] font-semibold" style={{ color: "var(--color-brand)" }}>
+                Know a company already? Add its website yourself
+              </summary>
+              <div className="mt-2">
+                <AddCompanies googleEnabled={placesEnabled()} />
+              </div>
+            </details>
 
             {stats.total > 0 ? (
               <div className="grid grid-cols-3 gap-3">
@@ -146,7 +187,7 @@ export default async function FindClientsPage({
                 hint={
                   filtered
                     ? "Clear a filter or lower the minimum score."
-                    : "Search Google for a type of business in a city, or paste a list of websites. Each one is audited for flaws your services fix."
+                    : "Press Scan now: Crosshair finds business owners sharing their websites on Reddit, Hacker News and community forums, then audits each one."
                 }
               />
             ) : (
@@ -155,7 +196,7 @@ export default async function FindClientsPage({
               </Suspense>
             )}
             <p className="text-[12px]" style={{ color: "var(--color-muted)" }}>
-              Public websites only; sites that ask crawlers to stay away (robots.txt) are skipped. Score = how much
+              Public posts and websites only; sites that ask crawlers to stay away (robots.txt) are skipped. Score = how much
               of what&apos;s wrong your services fix, +10 when there&apos;s a public way to reach them. Click a row for every flaw and its evidence.
             </p>
           </div>

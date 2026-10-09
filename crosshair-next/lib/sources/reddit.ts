@@ -1,6 +1,6 @@
 import "server-only";
 import Parser from "rss-parser";
-import { htmlToText, type PublicPost } from "./types";
+import { htmlToText, linksIn, type PublicPost } from "./types";
 
 /**
  * Reddit public search. With REDDIT_CLIENT_ID/SECRET it uses the official API
@@ -82,6 +82,8 @@ interface ApiChild {
     permalink?: string;
     created_utc?: number;
     over_18?: boolean;
+    url?: string;
+    selftext_html?: string | null;
   };
 }
 
@@ -119,6 +121,7 @@ async function searchViaApi(
       sourceName: d.subreddit ? `Reddit r/${d.subreddit}` : "Reddit",
       sourceUrl: `https://www.reddit.com${d.permalink}`,
       sourceAt: d.created_utc ? new Date(d.created_utc * 1000).toISOString() : null,
+      links: [...(d.url && !d.url.includes("reddit.com") ? [d.url] : []), ...linksIn(d.selftext_html ?? ""), ...linksIn(d.selftext ?? "")],
     });
   }
   return posts;
@@ -164,6 +167,7 @@ export async function searchReddit(
       sourceName: subreddit ? `Reddit r/${subreddit}` : "Reddit",
       sourceUrl: link,
       sourceAt: item.isoDate ?? null,
+      links: linksIn(item.content ?? ""),
     });
   }
   return posts;

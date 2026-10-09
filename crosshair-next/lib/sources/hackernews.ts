@@ -1,5 +1,5 @@
 import "server-only";
-import { htmlToText, type PublicPost } from "./types";
+import { htmlToText, linksIn, type PublicPost } from "./types";
 
 /**
  * Hacker News search via the public Algolia API. Free, no key, read-only.
@@ -13,6 +13,7 @@ interface Hit {
   story_text?: string | null;
   comment_text?: string | null;
   story_title?: string | null;
+  url?: string | null;
 }
 
 /**
@@ -49,7 +50,30 @@ export async function searchHackerNews(query: string, limit = 15, days = 30): Pr
       sourceName: "Hacker News",
       sourceUrl: `https://news.ycombinator.com/item?id=${hit.objectID}`,
       sourceAt: hit.created_at ?? null,
+      links: [...(hit.url ? [hit.url] : []), ...linksIn(hit.story_text ?? hit.comment_text ?? "")],
     });
   }
   return posts;
+}
+
+/** Recent "Show HN" launches: founders sharing their product's website. */
+export async function recentLaunches(limit = 60, days = 30): Promise<PublicPost[]> {
+  const since = Math.floor(Date.now() / 1000) - days * 24 * 3600;
+  const url =
+    "https://hn.algolia.com/api/v1/search_by_date" +
+    `?tags=show_hn&numericFilters=created_at_i>${since}&hitsPerPage=${Math.min(limit, 100)}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000), cache: "no-store" });
+  if (!res.ok) throw new Error(`Hacker News returned ${res.status}`);
+  const json = (await res.json()) as { hits?: Hit[] };
+  return (json.hits ?? [])
+    .filter((h) => h.url)
+    .map((h) => ({
+      who: h.author ? `HN user ${h.author}` : "an HN user",
+      title: (h.title ?? "").replace(/^show hn:\s*/i, ""),
+      said: htmlToText(h.story_text ?? h.title ?? ""),
+      sourceName: "Hacker News · Show HN",
+      sourceUrl: `https://news.ycombinator.com/item?id=${h.objectID}`,
+      sourceAt: h.created_at ?? null,
+      links: [h.url as string],
+    }));
 }

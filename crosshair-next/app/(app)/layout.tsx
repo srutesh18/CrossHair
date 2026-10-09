@@ -3,11 +3,7 @@ import { NavLink } from "@/components/ui/NavLink";
 import { createClient } from "@/lib/supabase/server";
 
 const NAV = [
-  { href: "/finder", label: "Find clients" },
-  { href: "/radar", label: "Radar" },
-  { href: "/signals", label: "Signals" },
-  { href: "/news", label: "News" },
-  { href: "/companies", label: "Companies" },
+  { href: "/finder", label: "Radar" },
   { href: "/pipeline", label: "Pipeline" },
   { href: "/setup", label: "Setup" },
 ];
@@ -45,8 +41,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             className="border-t pt-3 text-xs"
             style={{ borderColor: "rgba(255,255,255,.1)" }}
           >
-            <b className="block text-[13px] text-white">Draft mode</b>
-            A human approves every email. Hold leads are never sent. Public data only.
+            <b className="block text-[13px] text-white">Public data only</b>
+            Companies come from public posts and their own websites. Nothing is sent without you.
           </div>
           {email ? (
             <form action="/auth/signout" method="post" className="mt-3 border-t pt-3 text-xs" style={{ borderColor: "rgba(255,255,255,.1)" }}>

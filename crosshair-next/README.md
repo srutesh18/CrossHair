@@ -72,6 +72,7 @@ also paste each file into the Supabase SQL editor, in order.
 | `…_services_first.sql` | `services` per workspace, `service` matched on each signal |
 | `…_neutral_defaults.sql` | neutral default product name |
 | `…_companies.sql` | `companies` table (RLS): website, contacts, flaws with evidence, score, status |
+| `…_company_discovery.sql` | discovery sources (reddit / hn / forum) and where each company was found |
 
 All of them are applied to project `kvhqpgflvvdxxoebgjvv`. New migrations should use
 the same `YYYYMMDDHHMMSS_name.sql` naming.
@@ -134,7 +135,28 @@ If Typesafe is unreachable, Groq's ratings stand.
 There is deliberately **no sample-data fallback**: on failure the UI shows a real
 error rather than presenting invented leads as real.
 
-## Find clients (`/finder`, the home screen)
+## Radar (`/finder`, the home screen)
+
+**Automatic discovery.** Press **Scan now** (the first scan starts by itself).
+Crosshair searches public posts where business owners share their own website
+and adds each site as a company, then audits it. No manual lists needed:
+
+| Source | What it reads |
+|---|---|
+| Reddit | business and feedback communities (r/smallbusiness, r/Entrepreneur, r/web_design, r/SEO, r/shopify, r/SaaS, r/sideproject…) for "my website", "my store", "roast", "feedback", "I built", "launched" |
+| Hacker News | "Show HN" launches from the last 30 days, plus "feedback on my website" posts |
+| Communities | Bubble, n8n and Make.com forums: members' posts that mention their site |
+
+The owner's site is the first link that isn't a platform (Reddit, YouTube,
+GitHub, app stores, link shorteners…). Businesses (stores, services, clients,
+B2B) are ranked before hobby projects. Each company keeps where it was found
+(post, title, author), so replying to their post is a contact route too.
+
+A **3D radar** (three.js / React Three Fiber) shows every company as a beacon:
+nearer the centre and taller = better opportunity; colour = score; the beam
+speeds up while scanning. The audit then runs as below.
+
+### Find clients flow
 
 Crosshair finds **companies whose websites have problems your services fix**,
 proves each problem with evidence, and collects the public contact details on
@@ -144,7 +166,8 @@ address they published.
 1. **Say what you sell.** The first screen asks for your services (and,
    optionally, who a good customer is). Web design, SEO, app development and AI
    automation each map to a set of website checks.
-2. **Add companies**, three ways:
+2. **Add companies**: automatically by scanning (above), or by hand from the
+   "add a website yourself" link:
    - **Search Google**: "dentists" in "Austin, TX" (Places API, needs
      `GOOGLE_API_KEY`). Businesses with no website are added too: that is the
      biggest flaw of all.
