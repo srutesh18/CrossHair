@@ -1,6 +1,7 @@
 import "server-only";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertSupabaseEnv } from "./env";
 
@@ -33,23 +34,37 @@ export interface SessionContext {
 }
 
 /**
+ * The signed-in user, verified with Supabase once per request. The layout and
+ * the page both need it; React's cache() makes the second call free instead of
+ * another network round trip.
+ */
+export const getAuthUser = cache(async () => {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  return { supabase, user: data.user };
+});
+
+/** The user's workspace id, also once per request. */
+const getOrgId = cache(async (userId: string): Promise<string | null> => {
+  const { supabase } = await getAuthUser();
+  const { data, error } = await supabase
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", userId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data?.org_id as string | undefined) ?? null;
+});
+
+/**
  * Resolve the signed-in user and their org. Throws if not signed in, so route
  * handlers fail closed rather than leaking another org's rows.
  */
 export async function requireSession(): Promise<SessionContext> {
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getUser();
-  const user = auth.user;
+  const { supabase, user } = await getAuthUser();
   if (!user) throw new Error("UNAUTHENTICATED");
-
-  const { data, error } = await supabase
-    .from("org_members")
-    .select("org_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("NO_ORG");
-
-  return { supabase, userId: user.id, orgId: data.org_id as string };
+  const orgId = await getOrgId(user.id);
+  if (!orgId) throw new Error("NO_ORG");
+  return { supabase, userId: user.id, orgId };
 }

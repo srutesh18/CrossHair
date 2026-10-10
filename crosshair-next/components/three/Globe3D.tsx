@@ -4,6 +4,7 @@ import { useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
+import { useActiveCanvas } from "./useActiveCanvas";
 
 const R = 2;
 const MINT = "#3ddc97";
@@ -91,7 +92,7 @@ function Arc({ from, to, color, delay }: { from: THREE.Vector3; to: THREE.Vector
 }
 
 function Globe({ dotColor }: { dotColor: string }) {
-  const dots = useDots(1800);
+  const dots = useDots(1400);
   const hubs = useMemo(() => HUBS.map(([lat, lon]) => toVec(lat, lon, R * 1.005)), []);
   return (
     <group rotation={[0.35, 0, 0.08]}>
@@ -122,10 +123,13 @@ function Globe({ dotColor }: { dotColor: string }) {
 /** Interactive globe: drag to spin; spins by itself; still for reduced motion. */
 export default function Globe3D({ dotColor = "#7fd1c0" }: { dotColor?: string }) {
   const still = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const { ref, frameloop } = useActiveCanvas<HTMLDivElement>();
   return (
-    <Canvas camera={{ position: [0, 0, 6.2], fov: 42 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }} frameloop={still ? "demand" : "always"}>
-      <Globe dotColor={dotColor} />
-      <OrbitControls enableZoom={false} enablePan={false} autoRotate={!still} autoRotateSpeed={0.6} rotateSpeed={0.5} />
-    </Canvas>
+    <div ref={ref} className="h-full w-full">
+      <Canvas camera={{ position: [0, 0, 6.2], fov: 42 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true }} frameloop={still ? "demand" : frameloop}>
+        <Globe dotColor={dotColor} />
+        <OrbitControls enableZoom={false} enablePan={false} autoRotate={!still} autoRotateSpeed={0.6} rotateSpeed={0.5} />
+      </Canvas>
+    </div>
   );
 }

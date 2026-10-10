@@ -39,6 +39,12 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+// Only pages that need a session (and /login, to bounce signed-in users).
+// API routes check the session themselves; the public landing page needs none.
+// Skipping the rest saves a ~0.5s auth round trip on every one of them.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    "/finder/:path*", "/pipeline/:path*", "/templates/:path*", "/radar/:path*",
+    "/signals/:path*", "/news/:path*", "/companies/:path*", "/setup/:path*", "/login",
+  ],
 };

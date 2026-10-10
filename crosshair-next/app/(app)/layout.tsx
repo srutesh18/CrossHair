@@ -1,15 +1,15 @@
 import { Sidebar, type SidebarStats } from "@/components/ui/Sidebar";
 import { CommandPalette } from "@/components/ui/CommandPalette";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/server";
 
 const WEEKLY_GOAL = 20;
 
 /** Live numbers for the sidebar. Every query runs as the user (RLS). */
 async function sidebarData(): Promise<{ email: string | null; stats: SidebarStats | null }> {
   try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) return { email: null, stats: null };
+    // Shared with the page via cache(): one auth round trip per request.
+    const { supabase, user } = await getAuthUser();
+    if (!user) return { email: null, stats: null };
     const now = new Date();
     const weekStart = new Date(now);
     weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
@@ -25,7 +25,7 @@ async function sidebarData(): Promise<{ email: string | null; stats: SidebarStat
     ]);
     const last = (run.data ?? [])[0] as { finished_at: string | null; started_at: string } | undefined;
     return {
-      email: data.user.email ?? null,
+      email: user.email ?? null,
       stats: {
         toReview: review.count ?? 0,
         strong: strong.count ?? 0,

@@ -101,14 +101,14 @@ export default async function FindClientsPage({
     const { supabase, orgId } = await requireSession();
     const [orgRes, list, pendingRes, statsRes, radarRes, runRes] = await Promise.all([
       supabase.from("orgs").select("services, icp").eq("id", orgId).maybeSingle(),
-      getCompanies(supabase, filters),
+      getCompanies(supabase, filters, 200),
       supabase.from("companies").select("id", { count: "exact", head: true }).eq("status", "new"),
       supabase
         .from("companies")
         .select("id, name, domain, website, score, flaws, services_matched, emails, phone, contact_page, found_url, trigger_kind, trigger_headline, trigger_url, trigger_at, status")
         .in("status", ["new", "audited"])
         .order("score", { ascending: false })
-        .limit(1000),
+        .limit(500),
       Promise.resolve(null),
       supabase
         .from("crawl_runs")
@@ -259,7 +259,7 @@ export default async function FindClientsPage({
               </Suspense>
             )}
             <p className="text-[12px]" style={{ color: "var(--color-muted)" }}>
-              Public posts and websites only; sites that ask crawlers to stay away (robots.txt) are skipped. Score = how much
+              Showing the top 200 by score; use filters or Export to see the rest. Public posts and websites only; sites that ask crawlers to stay away (robots.txt) are skipped. Score = how much
               of what&apos;s wrong your services fix, +10 when there&apos;s a public way to reach them. Click a row for every flaw and its evidence.
             </p>
           </div>

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { useActiveCanvas } from "./useActiveCanvas";
 
 export interface FunnelStage {
   label: string;
@@ -71,9 +72,10 @@ function Scene({ stages, hovered, setHovered }: { stages: FunnelStage[]; hovered
 /** A 3D funnel of the pipeline with a DOM legend; hover either to highlight. */
 export default function Funnel3D({ stages }: { stages: FunnelStage[] }) {
   const [hovered, setHovered] = useState<number | null>(null);
+  const { ref, frameloop } = useActiveCanvas<HTMLDivElement>();
   return (
-    <div className="relative h-full w-full">
-      <Canvas camera={{ position: [0, 0.6, 6], fov: 38 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+    <div ref={ref} className="relative h-full w-full">
+      <Canvas camera={{ position: [0, 0.6, 6], fov: 38 }} dpr={[1, 1.5]} frameloop={frameloop} gl={{ antialias: true, alpha: true }}>
         <Scene stages={stages} hovered={hovered} setHovered={setHovered} />
       </Canvas>
       <ul className="absolute top-1/2 right-4 -translate-y-1/2 space-y-2.5">

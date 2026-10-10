@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { useActiveCanvas } from "@/components/three/useActiveCanvas";
 
 export interface Blip {
   id: string;
@@ -222,9 +223,10 @@ function Scene({
 export default function Radar3D({ blips, scanning }: { blips: Blip[]; scanning: boolean }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const blip = blips.find((b) => b.id === hovered);
+  const { ref, frameloop } = useActiveCanvas<HTMLDivElement>();
   return (
-    <div className="relative h-full w-full" role="img" aria-label={`Radar showing ${blips.length} companies`} style={{ cursor: hovered ? "pointer" : "default" }}>
-      <Canvas camera={{ position: [0, 6.6, 7.6], fov: 40 }} onCreated={({ camera }) => camera.lookAt(0, -0.6, 0)} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+    <div ref={ref} className="relative h-full w-full" role="img" aria-label={`Radar showing ${blips.length} companies`} style={{ cursor: hovered ? "pointer" : "default" }}>
+      <Canvas camera={{ position: [0, 6.6, 7.6], fov: 40 }} onCreated={({ camera }) => camera.lookAt(0, -0.6, 0)} dpr={[1, 1.5]} frameloop={frameloop} gl={{ antialias: true, alpha: true }}>
         <Scene blips={blips} scanning={scanning} hovered={hovered} setHovered={setHovered} />
       </Canvas>
       {blip ? (
