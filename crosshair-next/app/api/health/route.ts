@@ -22,7 +22,8 @@ export async function GET() {
     const { error } = await supabase.from("orgs").select("id").limit(1);
     schema = !error;
   }
-  const ok = Boolean(SUPABASE_URL && SUPABASE_PUBLIC_KEY && process.env.GROQ_API_KEY && schema);
+  // Groq is optional: discovery, audits, scoring and email templates work without it.
+  const ok = Boolean(SUPABASE_URL && SUPABASE_PUBLIC_KEY && schema);
   return NextResponse.json(
     {
       ok,
