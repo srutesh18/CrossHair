@@ -27,6 +27,9 @@ storage/
 backend/
 crosshair_pro.html
 
+# --- Generated source-code export (rebuild it any time; 8MB of derived content) ---
+crosshair-source-code.pdf
+
 # --- OS / editor ---
 .DS_Store
 *.log
