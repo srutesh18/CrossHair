@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { searchReddit } from "./sources/reddit";
 import { recentLaunches, searchHackerNews } from "./sources/hackernews";
 import { newsCompanies } from "./sources/companyNews";
+import { searchMany, webSearchEnabled } from "./sources/websearch";
 import type { PublicPost } from "./sources/types";
 import { addCompanies, type NewCompany } from "./companies";
 import { nameFromDomain, normaliseWebsite } from "./audit/url";
@@ -14,7 +15,7 @@ import { nameFromDomain, normaliseWebsite } from "./audit/url";
  * owner who asked for opinions. No manual lists, no logins, public data only.
  */
 
-export const DISCOVERY_SOURCES = ["reddit", "hn", "forums", "news"] as const;
+export const DISCOVERY_SOURCES = ["reddit", "hn", "forums", "news", "search"] as const;
 export type DiscoverySource = (typeof DISCOVERY_SOURCES)[number];
 
 export const DISCOVERY_LABEL: Record<DiscoverySource, string> = {
@@ -22,6 +23,7 @@ export const DISCOVERY_LABEL: Record<DiscoverySource, string> = {
   hn: "Hacker News",
   forums: "Communities",
   news: "Company news",
+  search: "Web search",
 };
 
 const BUSINESS_SUBS = [
@@ -121,6 +123,7 @@ export interface DiscoveryResult {
 export async function discoverCompanies(
   sources: DiscoverySource[] = [...DISCOVERY_SOURCES],
   maxCompanies = 60,
+  searchQueries: string[] = [],
 ): Promise<{ companies: NewCompany[]; sources: Partial<Record<DiscoverySource, SourceStat>> }> {
   const jobs: Array<[DiscoverySource, () => Promise<PublicPost[]>]> = [];
   if (sources.includes("reddit")) {
@@ -170,7 +173,46 @@ export async function discoverCompanies(
         })
     : Promise.resolve();
 
-  const [settled] = await Promise.all([Promise.allSettled(jobs.map(([, job]) => job())), newsJob]);
+  // A search hit is already a website, so like news it skips the post-mining step.
+  const searchJob = !sources.includes("search")
+    ? Promise.resolve()
+    : searchQueries.length === 0
+      ? Promise.resolve(
+          void (stats.search = {
+            ok: false,
+            posts: 0,
+            sites: 0,
+            error: "Nothing to search for. Add your services in Setup, or set search queries.",
+          }),
+        )
+      : (webSearchEnabled()
+          ? searchMany(searchQueries)
+          : Promise.reject(new Error("Add GOOGLE_CSE_KEY and GOOGLE_CSE_CX to use web search."))
+        )
+          .then((hits) => {
+            let added = 0;
+            for (const h of hits) {
+              if (seen.has(h.domain)) continue;
+              seen.add(h.domain);
+              added += 1;
+              companies.push({
+                name: nameFromDomain(h.domain),
+                website: h.website,
+                domain: h.domain,
+                source: "search",
+                found_url: h.website,
+                found_title: [h.title, h.snippet].filter(Boolean).join(" — ").slice(0, 300),
+                found_author: "Web search",
+                found_at: new Date().toISOString(),
+              });
+            }
+            stats.search = { ok: true, posts: hits.length, sites: added };
+          })
+          .catch((err: unknown) => {
+            stats.search = { ok: false, posts: 0, sites: 0, error: err instanceof Error ? err.message : String(err) };
+          });
+
+  const [settled] = await Promise.all([Promise.allSettled(jobs.map(([, job]) => job())), newsJob, searchJob]);
 
   settled.forEach((r, i) => {
     const key = jobs[i]?.[0];
@@ -206,6 +248,20 @@ export async function discoverCompanies(
   return { companies: companies.slice(0, maxCompanies + (stats.news?.sites ?? 0)), sources: stats };
 }
 
+/**
+ * What to search the web for. The workspace's own queries win; otherwise build
+ * one per service, since a service ("SEO", "web design") is what its customers
+ * are searching for too. Capped because each query spends one of 100 a day.
+ */
+export function searchQueriesFor(
+  org: { search_queries?: string[] | null; services?: string[] | null; keywords?: string[] | null } | null,
+): string[] {
+  const explicit = (org?.search_queries ?? []).map((q) => q.trim()).filter(Boolean);
+  if (explicit.length > 0) return explicit.slice(0, 5);
+  const terms = [...(org?.services ?? []), ...(org?.keywords ?? [])].map((t) => t.trim()).filter(Boolean);
+  return terms.slice(0, 3);
+}
+
 /** Run a discovery scan for the workspace and record it. */
 export async function runDiscovery(
   supabase: SupabaseClient,
@@ -218,7 +274,14 @@ export async function runDiscovery(
     .select("id")
     .single();
 
-  const { companies, sources: stats } = await discoverCompanies(sources);
+  const { data: org } = await supabase
+    .from("orgs")
+    .select("search_queries, services, keywords")
+    .eq("id", orgId)
+    .maybeSingle();
+  const queries = searchQueriesFor(org);
+
+  const { companies, sources: stats } = await discoverCompanies(sources, 60, queries);
   const added = await addCompanies(supabase, orgId, companies);
   const allFailed = Object.values(stats).every((s) => s && !s.ok);
 

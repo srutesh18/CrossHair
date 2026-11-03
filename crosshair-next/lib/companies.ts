@@ -8,7 +8,15 @@ import { nameFromDomain, normaliseWebsite } from "./audit/url";
 
 export type CompanyStatus = "new" | "audited" | "failed" | "contacted" | "dismissed";
 
-export type CompanySource = "manual" | "csv" | "google_places" | "reddit" | "hn" | "forum" | "news";
+export type CompanySource =
+  | "manual"
+  | "csv"
+  | "google_places"
+  | "reddit"
+  | "hn"
+  | "forum"
+  | "news"
+  | "search";
 
 export interface Company {
   id: string;

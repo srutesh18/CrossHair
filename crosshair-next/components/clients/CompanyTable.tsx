@@ -46,6 +46,7 @@ const SOURCE_LABEL: Record<string, string> = {
   forum: "Community",
   news: "News",
   google_places: "Google",
+  search: "Web search",
   manual: "Added by you",
   csv: "CSV",
 };

@@ -11,13 +11,19 @@ const Radar3D = dynamic(() => import("./Radar3D"), {
   loading: () => <div className="grid h-full place-items-center text-[13px] text-white/50">Loading radar…</div>,
 });
 
-type Source = "reddit" | "hn" | "forums" | "news";
+type Source = "reddit" | "hn" | "forums" | "news" | "search";
 const SOURCES: Array<{ key: Source; label: string; detail: string }> = [
   { key: "reddit", label: "Reddit", detail: "owners sharing their site in business communities" },
   { key: "hn", label: "Hacker News", detail: "new launches with a website" },
   { key: "forums", label: "Communities", detail: "Bubble, n8n and Make members' sites" },
   { key: "news", label: "Company news", detail: "who just raised money or hired a new leader" },
+  { key: "search", label: "Web search", detail: "businesses by trade and city, from your services" },
 ];
+
+/** Every source in one state. Derived from SOURCES so a new source is never missed. */
+function allSources(state: "idle" | "running"): Record<Source, SourceState> {
+  return Object.fromEntries(SOURCES.map(({ key }) => [key, { state }])) as Record<Source, SourceState>;
+}
 
 type SourceState =
   | { state: "idle" }
@@ -44,12 +50,7 @@ function timeAgo(iso: string): string {
 
 export function ScanHub({ blips, services, pending, lastScan, autoStart }: Props) {
   const router = useRouter();
-  const [status, setStatus] = useState<Record<Source, SourceState>>({
-    reddit: { state: "idle" },
-    hn: { state: "idle" },
-    forums: { state: "idle" },
-    news: { state: "idle" },
-  });
+  const [status, setStatus] = useState<Record<Source, SourceState>>(() => allSources("idle"));
   const [discovering, setDiscovering] = useState(false);
   const [auditing, setAuditing] = useState(false);
   const [audit, setAudit] = useState({ done: 0, total: 0 });
@@ -84,7 +85,7 @@ export function ScanHub({ blips, services, pending, lastScan, autoStart }: Props
   const scan = useCallback(async () => {
     setDiscovering(true);
     setError(null);
-    setStatus({ reddit: { state: "running" }, hn: { state: "running" }, forums: { state: "running" }, news: { state: "running" } });
+    setStatus(allSources("running"));
     // One request per source so each one's progress shows as it lands.
     await Promise.all(
       SOURCES.map(async ({ key }) => {
