@@ -22,9 +22,9 @@
   --color-idle: #6a6454;
   --color-idle-bg: #ebe9e2;
 
-  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
-  --font-display: "Bricolage Grotesque", var(--font-body);
+  --font-body: var(--font-figtree), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, Menlo, monospace;
+  --font-display: var(--font-bricolage), var(--font-body);
 }
 
 body {

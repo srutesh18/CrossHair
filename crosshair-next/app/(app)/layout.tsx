@@ -10,30 +10,29 @@ async function sidebarData(): Promise<{ email: string | null; stats: SidebarStat
     // Shared with the page via cache(): one auth round trip per request.
     const { supabase, user } = await getAuthUser();
     if (!user) return { email: null, stats: null };
-    const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-    weekStart.setHours(0, 0, 0, 0);
 
-    const [review, strong, due, pipeline, sent, run] = await Promise.all([
-      supabase.from("companies").select("id", { count: "exact", head: true }).eq("status", "audited"),
-      supabase.from("companies").select("id", { count: "exact", head: true }).eq("status", "audited").gte("score", 60),
-      supabase.from("outreach").select("id", { count: "exact", head: true }).eq("stage", "emailed").lte("next_step", 2).lte("next_action_at", now.toISOString()),
-      supabase.from("outreach").select("id", { count: "exact", head: true }).in("stage", ["to_contact", "emailed", "replied"]),
-      supabase.from("outreach_emails").select("id", { count: "exact", head: true }).gte("sent_at", weekStart.toISOString()),
-      supabase.from("crawl_runs").select("finished_at, started_at").eq("query", "auto-discovery").order("started_at", { ascending: false }).limit(1),
-    ]);
-    const last = (run.data ?? [])[0] as { finished_at: string | null; started_at: string } | undefined;
+    // One round trip instead of six; RLS still scopes every count to this org.
+    const { data, error } = await supabase.rpc("sidebar_stats");
+    if (error) throw new Error(error.message);
+    const s = (data ?? {}) as {
+      to_review?: number;
+      strong?: number;
+      due?: number;
+      in_pipeline?: number;
+      sent_this_week?: number;
+      last_scan?: string | null;
+    };
+
     return {
       email: user.email ?? null,
       stats: {
-        toReview: review.count ?? 0,
-        strong: strong.count ?? 0,
-        due: due.count ?? 0,
-        inPipeline: pipeline.count ?? 0,
-        sentThisWeek: sent.count ?? 0,
+        toReview: s.to_review ?? 0,
+        strong: s.strong ?? 0,
+        due: s.due ?? 0,
+        inPipeline: s.in_pipeline ?? 0,
+        sentThisWeek: s.sent_this_week ?? 0,
         weeklyGoal: WEEKLY_GOAL,
-        lastScan: last ? last.finished_at ?? last.started_at : null,
+        lastScan: s.last_scan ?? null,
       },
     };
   } catch {
