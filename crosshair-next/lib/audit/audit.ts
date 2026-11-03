@@ -135,6 +135,12 @@ interface PsiResponse {
  * evidence a business owner can verify; our own fetch timing was just noise
  * from whichever network the audit happened to run on.
  */
+/**
+ * Lighthouse runs a real browser on Google's servers, so a call takes 10-30s.
+ * Capped well under that: a score is a bonus, never worth stalling a scan for.
+ */
+const PSI_TIMEOUT_MS = 25_000;
+
 async function pageSpeed(url: string): Promise<Flaw[]> {
   const key = process.env.GOOGLE_API_KEY;
   if (!key) return [];
@@ -143,7 +149,7 @@ async function pageSpeed(url: string): Promise<Flaw[]> {
     const api =
       `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}` +
       `&strategy=mobile${cats}&key=${key}`;
-    const res = await fetch(api, { signal: AbortSignal.timeout(60_000), cache: "no-store" });
+    const res = await fetch(api, { signal: AbortSignal.timeout(PSI_TIMEOUT_MS), cache: "no-store" });
     if (!res.ok) return [];
 
     const json = (await res.json()) as PsiResponse;
@@ -200,7 +206,15 @@ async function pageSpeed(url: string): Promise<Flaw[]> {
   }
 }
 
-export async function auditWebsite(website: string): Promise<AuditResult> {
+/**
+ * `pageSpeed` is off by default. Running it while sweeping dozens of newly
+ * discovered companies made every scan wait on Lighthouse; it is worth those
+ * seconds only for a company you are about to contact.
+ */
+export async function auditWebsite(
+  website: string,
+  opts: { pageSpeed?: boolean } = {},
+): Promise<AuditResult> {
   const contacts = emptyContacts();
   const origin = new URL(website).origin;
 
@@ -230,7 +244,7 @@ export async function auditWebsite(website: string): Promise<AuditResult> {
     brokenLinks($, page.finalUrl),
     hasSitemap(new URL(page.finalUrl).origin),
     crawlContactPages(contactLinks($, page.finalUrl), contacts).catch(() => undefined),
-    pageSpeed(page.finalUrl),
+    opts.pageSpeed ? pageSpeed(page.finalUrl) : Promise.resolve([] as Flaw[]),
   ]);
   const hasContact = contacts.emails.length > 0 || contacts.phones.length > 0 || contacts.hasForm;
 

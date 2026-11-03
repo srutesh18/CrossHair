@@ -166,7 +166,12 @@ async function orgServices(supabase: SupabaseClient, orgId: string): Promise<str
 }
 
 /** Audit one company and save flaws, contacts and score. */
-async function auditOne(supabase: SupabaseClient, company: Company, services: string[]): Promise<void> {
+async function auditOne(
+  supabase: SupabaseClient,
+  company: Company,
+  services: string[],
+  deep = false,
+): Promise<void> {
   const now = new Date().toISOString();
   if (!company.website) {
     const flaws = [noWebsiteFlaw()];
@@ -183,7 +188,7 @@ async function auditOne(supabase: SupabaseClient, company: Company, services: st
     return;
   }
   try {
-    const result = await auditWebsite(company.website);
+    const result = await auditWebsite(company.website, { pageSpeed: deep });
     if (result.blocked) {
       await supabase
         .from("companies")
@@ -255,9 +260,12 @@ async function auditOne(supabase: SupabaseClient, company: Company, services: st
 export async function auditPending(
   supabase: SupabaseClient,
   orgId: string,
-  opts: { ids?: string[]; batch?: number } = {},
+  opts: { ids?: string[]; batch?: number; deep?: boolean } = {},
 ): Promise<{ audited: number; remaining: number }> {
   const batch = opts.batch ?? 6;
+  // Naming specific companies means the user picked them, so spend the extra
+  // seconds on a Google PageSpeed score. A background sweep stays fast.
+  const deep = opts.deep ?? Boolean(opts.ids?.length);
   let query = supabase.from("companies").select("*");
   query = opts.ids?.length ? query.in("id", opts.ids) : query.eq("status", "new");
   const { data, error } = await query.order("created_at").limit(batch);
@@ -272,7 +280,7 @@ export async function auditPending(
       while (next < companies.length) {
         const c = companies[next];
         next += 1;
-        if (c) await auditOne(supabase, c, services);
+        if (c) await auditOne(supabase, c, services, deep);
       }
     }),
   );
