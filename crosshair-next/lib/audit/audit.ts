@@ -114,27 +114,89 @@ async function crawlContactPages(urls: string[], into: Contacts): Promise<void> 
   await crawler.run(urls);
 }
 
-/** Optional Google PageSpeed mobile score (needs GOOGLE_API_KEY). */
-async function pageSpeed(url: string): Promise<Flaw | null> {
+interface LighthouseAudit {
+  displayValue?: string;
+  numericValue?: number;
+}
+
+interface PsiResponse {
+  lighthouseResult?: {
+    categories?: Record<string, { score?: number } | undefined>;
+    audits?: Record<string, LighthouseAudit | undefined>;
+  };
+}
+
+/**
+ * Google PageSpeed Insights on mobile (needs GOOGLE_API_KEY, free).
+ *
+ * We ask for performance, SEO and accessibility because each maps to a service
+ * we sell, and we quote Google's own number plus the real metric. "Google rates
+ * your mobile site 31/100 and the page takes 8.4s to show its main content" is
+ * evidence a business owner can verify; our own fetch timing was just noise
+ * from whichever network the audit happened to run on.
+ */
+async function pageSpeed(url: string): Promise<Flaw[]> {
   const key = process.env.GOOGLE_API_KEY;
-  if (!key) return null;
+  if (!key) return [];
   try {
-    const api = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=mobile&category=performance&key=${key}`;
-    const res = await fetch(api, { signal: AbortSignal.timeout(45_000), cache: "no-store" });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { lighthouseResult?: { categories?: { performance?: { score?: number } } } };
-    const score = json.lighthouseResult?.categories?.performance?.score;
-    if (typeof score !== "number" || score >= 0.5) return null;
-    const pct = Math.round(score * 100);
-    return {
-      key: "pagespeed",
-      area: "design",
-      severity: pct < 30 ? "high" : "medium",
-      title: "Poor mobile performance",
-      evidence: `Google PageSpeed scores the mobile homepage ${pct}/100.`,
+    const cats = ["performance", "seo", "accessibility"].map((c) => `&category=${c}`).join("");
+    const api =
+      `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}` +
+      `&strategy=mobile${cats}&key=${key}`;
+    const res = await fetch(api, { signal: AbortSignal.timeout(60_000), cache: "no-store" });
+    if (!res.ok) return [];
+
+    const json = (await res.json()) as PsiResponse;
+    const categories = json.lighthouseResult?.categories ?? {};
+    const audits = json.lighthouseResult?.audits ?? {};
+    const pct = (name: string): number | null => {
+      const s = categories[name]?.score;
+      return typeof s === "number" ? Math.round(s * 100) : null;
     };
+
+    const flaws: Flaw[] = [];
+
+    const perf = pct("performance");
+    if (perf !== null && perf < 75) {
+      const lcp = audits["largest-contentful-paint"]?.displayValue;
+      flaws.push({
+        key: "pagespeed",
+        area: "design",
+        severity: perf < 50 ? "high" : "medium",
+        title: "Slow on phones",
+        evidence:
+          `Google rates the mobile homepage ${perf}/100 for speed` +
+          (lcp ? `, and its main content takes ${lcp} to appear.` : ".") +
+          " Most people leave before a slow page finishes loading.",
+      });
+    }
+
+    const seo = pct("seo");
+    if (seo !== null && seo < 85) {
+      flaws.push({
+        key: "psi_seo",
+        area: "seo",
+        severity: seo < 65 ? "high" : "medium",
+        title: "Weak on Google's own SEO checks",
+        evidence: `Google's SEO audit scores the homepage ${seo}/100, so it is losing search traffic to competitors.`,
+      });
+    }
+
+    const a11y = pct("accessibility");
+    if (a11y !== null && a11y < 75) {
+      flaws.push({
+        key: "psi_a11y",
+        area: "design",
+        severity: a11y < 55 ? "medium" : "low",
+        title: "Hard to use for some visitors",
+        evidence: `Google's accessibility audit scores the homepage ${a11y}/100 (unreadable contrast, unlabelled buttons and similar).`,
+      });
+    }
+
+    return flaws;
   } catch {
-    return null;
+    // PSI is a bonus signal; the rest of the audit still stands without it.
+    return [];
   }
 }
 
@@ -173,6 +235,13 @@ export async function auditWebsite(website: string): Promise<AuditResult> {
   const hasContact = contacts.emails.length > 0 || contacts.phones.length > 0 || contacts.hasForm;
 
   const flaws = checkHomepage($, page, { brokenLinks: broken, hasSitemap: sitemap, hasContact });
-  if (speed) flaws.push(speed);
-  return { flaws, contacts, blocked: false, pageTitle: $("title").first().text().replace(/\s+/g, " ").trim() };
+  // PSI measures speed properly, so drop our own rough fetch timing when it ran.
+  const measured = speed.length > 0 ? flaws.filter((f) => f.key !== "slow") : flaws;
+  measured.push(...speed);
+  return {
+    flaws: measured,
+    contacts,
+    blocked: false,
+    pageTitle: $("title").first().text().replace(/\s+/g, " ").trim(),
+  };
 }

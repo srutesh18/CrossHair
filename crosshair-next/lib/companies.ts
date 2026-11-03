@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import Papa from "papaparse";
 import { auditWebsite } from "./audit/audit";
 import { noWebsiteFlaw, type Flaw } from "./audit/checks";
-import { scoreCompany } from "./audit/score";
+import { reachOf, scoreCompany } from "./audit/score";
 import { nameFromDomain, normaliseWebsite } from "./audit/url";
 
 export type CompanyStatus = "new" | "audited" | "failed" | "contacted" | "dismissed";
@@ -29,6 +29,9 @@ export interface Company {
   category: string;
   rating: number | null;
   rating_count: number | null;
+  /** Review count at the previous audit, so new reviews can be counted. */
+  reviews_prev: number | null;
+  reviews_checked_at: string | null;
   phone: string;
   emails: string[];
   contact_page: string;
@@ -159,7 +162,12 @@ async function auditOne(supabase: SupabaseClient, company: Company, services: st
   const now = new Date().toISOString();
   if (!company.website) {
     const flaws = [noWebsiteFlaw()];
-    const { score, servicesMatched } = scoreCompany(flaws, services, Boolean(company.phone || company.emails.length), triggerOf(company));
+    const { score, servicesMatched } = scoreCompany({
+      flaws,
+      services,
+      reach: reachOf({ phone: company.phone, emails: company.emails, contactPage: company.contact_page }),
+      trigger: triggerOf(company),
+    });
     await supabase
       .from("companies")
       .update({ flaws, score, services_matched: servicesMatched, status: "audited", audit_error: "", audited_at: now })
@@ -188,7 +196,22 @@ async function auditOne(supabase: SupabaseClient, company: Company, services: st
     const name =
       company.name === nameFromDomain(company.domain) && brand.length >= 2 && brand.length <= 40 ? brand : company.name;
     const phone = company.phone || result.contacts.phones[0] || "";
-    const { score, servicesMatched } = scoreCompany(result.flaws, services, emails.length > 0 || Boolean(phone), triggerOf(company));
+    const { score, servicesMatched } = scoreCompany({
+      flaws: result.flaws,
+      services,
+      reach: reachOf({
+        phone,
+        emails,
+        contactPage: result.contacts.contactPage || company.contact_page,
+        hasForm: result.contacts.hasForm,
+      }),
+      trigger: triggerOf(company),
+      reviews: {
+        current: company.rating_count ?? null,
+        previous: company.reviews_prev ?? null,
+        since: company.reviews_checked_at ?? null,
+      },
+    });
     const { error } = await supabase
       .from("companies")
       .update({
@@ -198,6 +221,9 @@ async function auditOne(supabase: SupabaseClient, company: Company, services: st
         phone,
         socials: { ...company.socials, ...result.contacts.socials },
         contact_page: result.contacts.contactPage || company.contact_page,
+        // Snapshot the review count so the next audit can measure new reviews.
+        reviews_prev: company.rating_count ?? company.reviews_prev ?? null,
+        reviews_checked_at: now,
         score,
         services_matched: servicesMatched,
         status: "audited",
@@ -250,16 +276,25 @@ export async function auditPending(
 /** Re-score every audited company after the user changes their services. */
 export async function rescoreAll(supabase: SupabaseClient, orgId: string): Promise<number> {
   const services = await orgServices(supabase, orgId);
-  const { data, error } = await supabase.from("companies").select("id, flaws, emails, phone, trigger_kind, trigger_at").eq("status", "audited");
+  const { data, error } = await supabase.from("companies").select("id, flaws, emails, phone, contact_page, rating_count, reviews_prev, reviews_checked_at, trigger_kind, trigger_at").eq("status", "audited");
   if (error) throw new Error(error.message);
   let n = 0;
   for (const c of data ?? []) {
-    const { score, servicesMatched } = scoreCompany(
-      (c.flaws as Flaw[]) ?? [],
+    const { score, servicesMatched } = scoreCompany({
+      flaws: (c.flaws as Flaw[]) ?? [],
       services,
-      ((c.emails as string[]) ?? []).length > 0 || Boolean(c.phone),
-      triggerOf(c as { trigger_kind?: string; trigger_at?: string | null }),
-    );
+      reach: reachOf({
+        phone: (c.phone as string | null) ?? "",
+        emails: (c.emails as string[]) ?? [],
+        contactPage: (c.contact_page as string | null) ?? "",
+      }),
+      trigger: triggerOf(c as { trigger_kind?: string; trigger_at?: string | null }),
+      reviews: {
+        current: (c.rating_count as number | null) ?? null,
+        previous: (c.reviews_prev as number | null) ?? null,
+        since: (c.reviews_checked_at as string | null) ?? null,
+      },
+    });
     await supabase.from("companies").update({ score, services_matched: servicesMatched }).eq("id", c.id);
     n += 1;
   }

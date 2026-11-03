@@ -7,14 +7,33 @@ import { errorResponse } from "@/lib/api";
 
 export const runtime = "nodejs";
 
-const Body = z.object({
-  step: z.number().int().min(0).max(2),
-  to: z.string().trim().email("Enter a valid email address"),
-  subject: z.string().trim().min(1, "Subject is required").max(300),
-  body: z.string().trim().min(1, "Write the email first").max(10_000),
-  /** smtp: send from the server. mail_app: the user sent it from their own email app; just record it. */
-  method: z.enum(["smtp", "mail_app"]),
-});
+/**
+ * smtp: send from the server.
+ * mail_app / whatsapp: the user sent it themselves, we only record it.
+ * WhatsApp carries a phone number and no subject, so `to` is validated per method.
+ */
+const Body = z
+  .object({
+    step: z.number().int().min(0).max(2),
+    to: z.string().trim().min(1, "A recipient is required"),
+    subject: z.string().trim().max(300).default(""),
+    body: z.string().trim().min(1, "Write the message first").max(10_000),
+    method: z.enum(["smtp", "mail_app", "whatsapp"]),
+  })
+  .superRefine((v, ctx) => {
+    if (v.method === "whatsapp") {
+      if (v.to.replace(/\D/g, "").length < 7) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "Enter a valid phone number" });
+      }
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.to)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "Enter a valid email address" });
+    }
+    if (!v.subject) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subject"], message: "Subject is required" });
+    }
+  });
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {

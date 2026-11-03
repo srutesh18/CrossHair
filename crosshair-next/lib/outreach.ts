@@ -17,15 +17,19 @@ import { WAIT_DAYS } from "./templates";
 
 // ------------------------------------------------------------- pipeline
 
+/** whatsapp and mail_app are both "the user sent it themselves"; we only record it. */
+export type OutreachMethod = "smtp" | "mail_app" | "whatsapp";
+
 export type Stage = "to_contact" | "emailed" | "replied" | "won" | "lost";
 
 export interface OutreachEmail {
   id: string;
   step: number;
   to_email: string;
+  to_phone: string;
   subject: string;
   body: string;
-  method: "smtp" | "mail_app";
+  method: OutreachMethod;
   status: "sent" | "failed";
   error: string;
   sent_at: string;
@@ -74,14 +78,16 @@ export async function recordSent(
   supabase: SupabaseClient,
   orgId: string,
   row: { id: string; next_step: number },
-  email: { step: number; to: string; subject: string; body: string; method: "smtp" | "mail_app" },
+  email: { step: number; to: string; subject: string; body: string; method: OutreachMethod },
 ): Promise<void> {
   const now = new Date();
   const { error } = await supabase.from("outreach_emails").insert({
     org_id: orgId,
     outreach_id: row.id,
     step: email.step,
-    to_email: email.to,
+    // A WhatsApp message goes to a number, not an address.
+    to_email: email.method === "whatsapp" ? "" : email.to,
+    to_phone: email.method === "whatsapp" ? email.to : "",
     subject: email.subject,
     body: email.body,
     method: email.method,

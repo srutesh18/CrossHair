@@ -15,7 +15,7 @@ export interface SentEmail {
   to: string;
   subject: string;
   body: string;
-  method: "smtp" | "mail_app";
+  method: "smtp" | "mail_app" | "whatsapp";
   sentAt: string;
 }
 
@@ -127,12 +127,32 @@ function composeUrl(provider: Provider, to: string, subject: string, body: strin
   return `mailto:${encodeURIComponent(to)}?subject=${q(subject)}&body=${q(body)}`;
 }
 
+/**
+ * wa.me opens WhatsApp with the message pre-filled; the user presses send from
+ * their own account. No API, no cost, and nothing to get a domain blocked.
+ */
+function whatsappUrl(phone: string, body: string): string {
+  return `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(body)}`;
+}
+
+/** WhatsApp is read on a phone: no subject line, and keep it short. */
+function asWhatsapp(subject: string, body: string): string {
+  const text = body.replace(/\n{3,}/g, "\n\n").trim();
+  return subject ? `${subject}\n\n${text}` : text;
+}
+
 function Composer({ c, smtp, onClose }: { c: PipelineCard; smtp: boolean; onClose: () => void }) {
   const router = useRouter();
   const sentSteps = new Set(c.emails.map((e) => e.step));
   const firstUnsent = [0, 1, 2].find((s) => !sentSteps.has(s)) ?? 2;
   const [step, setStep] = useState<number>(c.nextStep >= 3 ? firstUnsent : c.nextStep);
+  const hasPhone = Boolean(c.company.phone);
+  const [channel, setChannel] = useState<"email" | "whatsapp">(
+    // Local businesses answer WhatsApp; fall back to email when there is no number.
+    hasPhone && c.company.emails.length === 0 ? "whatsapp" : "email",
+  );
   const [to, setTo] = useState(c.company.emails[0] ?? "");
+  const [phone, setPhone] = useState(c.company.phone ?? "");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(true);
@@ -182,13 +202,21 @@ function Composer({ c, smtp, onClose }: { c: PipelineCard; smtp: boolean; onClos
     }
   }
 
-  async function record(method: "smtp" | "mail_app") {
+  async function record(method: "smtp" | "mail_app" | "whatsapp") {
+    const isWa = method === "whatsapp";
     const ok = await call(method, `/api/pipeline/${c.id}/send`, {
       method: "POST",
-      body: JSON.stringify({ step, to, subject, body, method }),
+      body: JSON.stringify({
+        step,
+        to: isWa ? phone : to,
+        subject: isWa ? "" : subject,
+        body: isWa ? asWhatsapp(subject, body) : body,
+        method,
+      }),
     });
     if (ok) {
-      setNotice(method === "smtp" ? `Sent to ${to}. ${step < 2 ? `${STEPS[step + 1]} follow-up scheduled.` : "Sequence finished."}` : `Recorded. ${step < 2 ? `${STEPS[step + 1]} follow-up scheduled.` : "Sequence finished."}`);
+      const next = step < 2 ? `${STEPS[step + 1]} follow-up scheduled.` : "Sequence finished.";
+      setNotice(method === "smtp" ? `Sent to ${to}. ${next}` : `Recorded. ${next}`);
       setOpened(false);
     }
   }
@@ -234,6 +262,34 @@ function Composer({ c, smtp, onClose }: { c: PipelineCard; smtp: boolean; onClos
           </div>
 
           <div className="space-y-2">
+            {hasPhone ? (
+              <div className="flex gap-1 rounded-[10px] border p-1" style={{ borderColor: "var(--color-line)", background: "var(--color-raise)" }} role="tablist" aria-label="Channel">
+                {(["email", "whatsapp"] as const).map((ch) => (
+                  <button
+                    key={ch}
+                    type="button"
+                    role="tab"
+                    aria-selected={channel === ch}
+                    onClick={() => setChannel(ch)}
+                    className="flex-1 rounded-[7px] px-3 py-1.5 text-[13px] font-medium"
+                    style={channel === ch ? { background: "var(--color-surface)", color: "var(--color-fg)", boxShadow: "0 1px 2px rgba(10,16,34,.14)" } : { color: "var(--color-muted)" }}
+                  >
+                    {ch === "email" ? "Email" : "WhatsApp"}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {channel === "whatsapp" ? (
+              <>
+                <label className="block text-[13px] font-semibold" htmlFor="wa-phone">WhatsApp number</label>
+                <input id="wa-phone" className="ch-input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+                <p className="text-[12px]" style={{ color: "var(--color-muted)" }}>
+                  Include the country code. Local businesses reply here far more often than to email.
+                </p>
+              </>
+            ) : (
+              <>
             <label className="block text-[13px] font-semibold" htmlFor="to">To</label>
             <input id="to" className="ch-input" type="email" list="found-emails" value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@company.com" />
             <datalist id="found-emails">
@@ -248,9 +304,15 @@ function Composer({ c, smtp, onClose }: { c: PipelineCard; smtp: boolean; onClos
                 {c.company.phone ? ` · phone ${c.company.phone}` : ""}
               </p>
             ) : null}
-            <label className="block pt-1 text-[13px] font-semibold" htmlFor="subject">Subject</label>
-            <input id="subject" className="ch-input" value={subject} onChange={(e) => setSubject(e.target.value)} disabled={loading} />
-            <label className="block pt-1 text-[13px] font-semibold" htmlFor="body">Email</label>
+              </>
+            )}
+            {channel === "email" ? (
+              <>
+                <label className="block pt-1 text-[13px] font-semibold" htmlFor="subject">Subject</label>
+                <input id="subject" className="ch-input" value={subject} onChange={(e) => setSubject(e.target.value)} disabled={loading} />
+              </>
+            ) : null}
+            <label className="block pt-1 text-[13px] font-semibold" htmlFor="body">{channel === "whatsapp" ? "Message" : "Email"}</label>
             <textarea id="body" className="ch-input font-[inherit] leading-relaxed" rows={14} value={loading ? "Writing from their audit and news…" : body} onChange={(e) => setBody(e.target.value)} disabled={loading} />
           </div>
 
@@ -261,16 +323,43 @@ function Composer({ c, smtp, onClose }: { c: PipelineCard; smtp: boolean; onClos
             <p className="text-[13px]" style={{ color: "var(--color-muted)" }}>This company is closed. Reopen it below to email again.</p>
           ) : opened ? (
             <div className="rounded-[12px] border p-3" style={{ borderColor: "var(--color-brand)", background: "var(--color-brand-soft)" }}>
-              <p className="text-[13px] font-semibold">Did you send it from your email?</p>
+              <p className="text-[13px] font-semibold">{channel === "whatsapp" ? "Did you send it on WhatsApp?" : "Did you send it from your email?"}</p>
               <div className="mt-2 flex gap-2">
-                <button type="button" className="ch-btn ch-btn-primary text-[13px]" disabled={busy !== null} onClick={() => void record("mail_app")}>
-                  {busy === "mail_app" ? "Saving…" : "Yes, I sent it"}
+                <button type="button" className="ch-btn ch-btn-primary text-[13px]" disabled={busy !== null} onClick={() => void record(channel === "whatsapp" ? "whatsapp" : "mail_app")}>
+                  {busy === "mail_app" || busy === "whatsapp" ? "Saving…" : "Yes, I sent it"}
                 </button>
                 <button type="button" className="ch-btn text-[13px]" onClick={() => setOpened(false)}>Not yet</button>
               </div>
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
+              {channel === "whatsapp" ? (
+                <>
+                  <a
+                    href={phone && !loading ? whatsappUrl(phone, asWhatsapp(subject, body)) : undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => phone && !loading && setOpened(true)}
+                    aria-disabled={!phone || loading}
+                    className={`ch-btn ch-btn-primary text-[13px] ${!phone || loading ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    Open in WhatsApp
+                  </a>
+                  <button
+                    type="button"
+                    className="ch-btn text-[13px]"
+                    disabled={loading}
+                    onClick={() => void navigator.clipboard.writeText(asWhatsapp(subject, body)).then(() => setNotice("Copied."))}
+                  >
+                    Copy message
+                  </button>
+                  <p className="w-full text-[12px]" style={{ color: "var(--color-muted)" }}>
+                    Opens WhatsApp with the message ready. You press send, so it comes from your own
+                    number and nothing can hurt a sending domain.
+                  </p>
+                </>
+              ) : (
+                <>
               {smtp ? (
                 <button type="button" className="ch-btn ch-btn-primary" disabled={busy !== null || loading || !to} onClick={() => void record("smtp")}>
                   {busy === "smtp" ? "Sending…" : "Send now"}
@@ -297,6 +386,8 @@ function Composer({ c, smtp, onClose }: { c: PipelineCard; smtp: boolean; onClos
                   Opens a ready-to-send draft in your own email. To send from here instead, add SMTP details (see Templates).
                 </p>
               ) : null}
+                </>
+              )}
             </div>
           )}
 
@@ -311,7 +402,7 @@ function Composer({ c, smtp, onClose }: { c: PipelineCard; smtp: boolean; onClos
                     <div className="flex items-center gap-2 text-[12px]">
                       <span className="ch-tag">{STEPS[e.step]}</span>
                       <span className="min-w-0 flex-1 truncate">to {e.to}</span>
-                      <span style={{ color: "var(--color-muted)" }}>{e.method === "smtp" ? "sent here" : "sent from your email"} · {ago(e.sentAt)}</span>
+                      <span style={{ color: "var(--color-muted)" }}>{e.method === "smtp" ? "sent here" : e.method === "whatsapp" ? "sent on WhatsApp" : "sent from your email"} · {ago(e.sentAt)}</span>
                     </div>
                     <details className="mt-1">
                       <summary className="cursor-pointer truncate text-[13px] font-semibold">{e.subject}</summary>
